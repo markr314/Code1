@@ -199,15 +199,31 @@ Coarse-mesh sweep (0.40/0.24/0.08 mm, side-arm polarization excitation only,
 The trend is monotonic in tip width and roughly saturates in tip length, but
 the improvement is small and nowhere near the ~20 dB the memo measures.
 
-**Treat these numbers as indicative only.** Every tip case carries a 10–18 %
-power error against the baseline's 2.6 %, so they are not converged, and the
-spread between them is comparable to that error. A blunt tip also shifts the
-aperture upstream and shortens it, which changes the side-arm guide height at
-the same time — the sweep is not a clean one-variable study. Before drawing
-conclusions, these need re-running at the production mesh with enough
-timesteps to meet the energy criterion, and the source of the extra power
-error needs to be identified (most likely coupling into the overmoded common
-arm's higher-order modes, which these ports do not monitor).
+**Those power errors were truncation, not physics.** Re-running a tip case at
+50 000 timesteps brings power conservation to 0.984–0.997 (1.6 % error), so
+the 30 000-timestep sweep above simply had not decayed far enough and its
+case-to-case ranking cannot be trusted. Any tuning sweep on this structure
+needs to meet the energy criterion before its numbers mean anything.
+
+A `hom_monitor` option adds a TE11 monitor port on the common arm, which
+turns power leaving through the overmoded common arm into an accounted
+channel rather than a deficit. On a symmetric (common-arm) excitation the
+TE11 content is ~0 across the band, confirming the memo's claim that the
+junction's twofold symmetry is what keeps TE11/TM11 unexcited. (TM11 is not
+covered: openEMS's rectangular waveguide port supports TE modes only.)
+
+There is also a real geometric trade-off between the two ways of adding a
+tip, and it is not free either way:
+
+* `tip_auto_slope` holds the aperture at the standard side-arm height and
+  lets the miter angle absorb the tip, which makes tip_len and tip_w clean
+  one-variable knobs. But blunting the tip then forces a slope well away
+  from 45° — and the miter sweep says 45° is strongly preferred. A converged
+  run at tip (1.2, 0.8) in this mode is essentially a short circuit
+  (worst return loss −0.03 dB).
+* `ap_from_tip` keeps the 45° miter and lets the aperture follow the tip,
+  which is the better-behaved branch, but the aperture then shifts upstream
+  and shortens, so the side-arm guide height moves along with the tip.
 
 Separately, the miter angle was swept at 45° ± : slope 0.60 and 1.25 are both
 far worse than 1.00, supporting the 45° miter as the right choice.

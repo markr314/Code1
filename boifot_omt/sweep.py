@@ -7,7 +7,8 @@ from typing import Iterable, Optional, Sequence
 import numpy as np
 
 from .params import BoifotParams
-from .model import build_model, mesh_summary, PORT_NAMES, PORT_LABELS
+from .model import (build_model, mesh_summary, PORT_NAMES, PORT_LABELS,
+                    port_names, n_ports)
 from .waveguide import beta as wg_beta, f_cutoff_te
 
 NP = len(PORT_NAMES)
@@ -15,7 +16,10 @@ NP = len(PORT_NAMES)
 
 def port_cutoffs(p: BoifotParams) -> np.ndarray:
     """Cutoff frequency (Hz) of each modal port's operating mode."""
-    return np.array([p.fc, p.fc, p.fc, p.fc_side, p.fc_side])
+    fc = [p.fc, p.fc, p.fc, p.fc_side, p.fc_side]
+    if p.hom_monitor:
+        fc.append(f_cutoff_te(p.a_o, p.a_o, 1, 1))
+    return np.array(fc)
 
 
 def run_sweep(
@@ -35,15 +39,17 @@ def run_sweep(
     if excitations is None:
         excitations = range(NP)
     os.makedirs(out_dir, exist_ok=True)
-    S = np.full((len(freq), NP, NP), np.nan, dtype=complex)
+    np_tot = n_ports(p)
+    names = port_names(p)
+    S = np.full((len(freq), np_tot, np_tot), np.nan, dtype=complex)
     cwd = os.getcwd()
     try:
         for exc in excitations:
             m = build_model(p, excite_port=exc)
             if exc == list(excitations)[0]:
                 log(mesh_summary(m))
-            sim = os.path.join(os.path.abspath(out_dir), f"exc_{PORT_NAMES[exc]}")
-            log(f"--- exciting port {exc} ({PORT_LABELS[PORT_NAMES[exc]]}) -> {sim}")
+            sim = os.path.join(os.path.abspath(out_dir), f"exc_{names[exc]}")
+            log(f"--- exciting port {exc} ({PORT_LABELS[names[exc]]}) -> {sim}")
             m.FDTD.Run(sim, cleanup=True, verbose=verbose, numThreads=threads)
             os.chdir(cwd)
             for port in m.ports:
@@ -66,13 +72,14 @@ def deembed(
     propagation constant of that port's mode.
     """
     fc = port_cutoffs(p)
-    phase = np.zeros((len(freq), NP))
-    for i in range(NP):
+    nprt = S.shape[1]
+    phase = np.zeros((len(freq), nprt))
+    for i in range(nprt):
         b = np.array([wg_beta(f, fc[i]) for f in freq])
         phase[:, i] = b * dist_mm[i] * 1e-3
     out = np.empty_like(S)
-    for i in range(NP):
-        for j in range(NP):
+    for i in range(nprt):
+        for j in range(nprt):
             out[:, j, i] = S[:, j, i] * np.exp(1j * (phase[:, i] + phase[:, j]))
     return out
 
@@ -199,13 +206,14 @@ def unitarity_report(S: np.ndarray, freq: np.ndarray, band=None) -> str:
         else (freq >= band[0]) & (freq <= band[1])
     )
     lines = ["power conservation, sum_j |S_ji|^2 per excited port i:"]
+    names = PORT_NAMES + (["common_TE11"] if u.shape[1] > 5 else [])
     for i in range(u.shape[1]):
         col = u[sel, i]
         if not np.any(np.isfinite(col)) or np.allclose(col, 0):
-            lines.append(f"  port {i} ({PORT_NAMES[i]:9s}): not excited")
+            lines.append(f"  port {i} ({names[i]:12s}): not excited")
             continue
         lines.append(
-            f"  port {i} ({PORT_NAMES[i]:9s}): min {col.min():.4f}  "
+            f"  port {i} ({names[i]:12s}): min {col.min():.4f}  "
             f"max {col.max():.4f}  worst error {max(abs(col.min()-1), abs(col.max()-1))*100:.2f} %"
         )
     return "\n".join(lines)

@@ -50,7 +50,7 @@ def occupancy(p: BoifotParams, lines=None):
     # metal back in: septum (mitred wedge) and pins
     if p.dt_sep > 0:
         sy = np.abs(cy) < p.dt_sep / 2
-        wedge = (cz[None, :] >= p.z_tip + p.miter_slope * np.maximum(
+        wedge = (cz[None, :] >= p.z_tip + p.slope * np.maximum(
             np.abs(cx) - p.tip_w, 0.0)[:, None]) & (
             cz[None, :] <= p.z_sep_end
         )

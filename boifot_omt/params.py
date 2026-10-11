@@ -82,7 +82,8 @@ class BoifotParams:
     # ---- side-arm aperture ---------------------------------------------
     # full height in y; the z extent is the side-arm guide height
     ap_len_norm: float = 1.0  # aperture z extent, in units of b_o
-    ap_from_tip: bool = True  # tie the aperture to the tip, see ap_len
+    ap_from_tip: bool = False  # alternative: let the tip drag the aperture
+    tip_auto_slope: bool = True  # hold the aperture fixed, see `slope`
     side_len: float = 14.0  # straight side-arm run from the aperture outward
 
     # ---- main-arm transformer (memo: 4-step, 2:1, w_q=0.84, f_o/f_c=1.565)
@@ -107,6 +108,7 @@ class BoifotParams:
     mesh_res: float = 0.25
     mesh_res_junction: float = 0.15  # junction region, where the mitred edge is staircased
     mesh_res_fine: float = 0.09
+    hom_monitor: bool = False  # add a TE11 monitor port on the common arm
     pml_cells: int = 8
     nr_timesteps: int = 60000
     end_criteria: float = 1e-5
@@ -129,6 +131,22 @@ class BoifotParams:
         return self.pin_d_norm * self.a_o
 
     @property
+    def slope(self) -> float:
+        """Effective dz/dx of the mitred tip edge.
+
+        With `tip_auto_slope` the aperture stays fixed at the standard
+        side-arm height and the slope is whatever makes the wedge reach the
+        side walls exactly at the aperture's downstream edge.  That keeps
+        tip_len and tip_w as clean one-variable knobs: without it, blunting
+        the tip also shifts the aperture upstream and shortens it, so the
+        side-arm guide height moves at the same time and a tuning sweep
+        confounds three changes at once.  tip_len = tip_w = 0 gives 45 deg.
+        """
+        if self.tip_auto_slope:
+            return (self.ap_len + self.tip_len) / (self.a_o / 2.0 - self.tip_w)
+        return self.miter_slope
+
+    @property
     def ap_len(self) -> float:
         """Side-arm aperture extent along z (= side-arm guide height).
 
@@ -140,7 +158,7 @@ class BoifotParams:
         side-arm polarisation almost completely.  With tip_len = tip_w = 0
         this reduces to a_o/2 = b_o.
         """
-        if self.ap_from_tip:
+        if self.ap_from_tip and not self.tip_auto_slope:
             return self.ap_len_norm * self.miter_slope * (
                 self.a_o / 2.0 - self.tip_w
             )
@@ -154,11 +172,11 @@ class BoifotParams:
     @property
     def z_tip_end(self) -> float:
         """z at which the mitred tip edge reaches the side walls."""
-        return -self.tip_len + self.miter_slope * (self.a_o / 2.0 - self.tip_w)
+        return -self.tip_len + self.slope * (self.a_o / 2.0 - self.tip_w)
 
     @property
     def z_ap0(self) -> float:
-        return self.z_tip if self.ap_from_tip else 0.0
+        return self.z_tip if (self.ap_from_tip and not self.tip_auto_slope) else 0.0
 
     @property
     def z_ap1(self) -> float:

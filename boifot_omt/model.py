@@ -29,7 +29,18 @@ PORT_LABELS = {
     "side_p": "side arm +x",
     "side_m": "side arm -x",
 }
+HOM_PORT_NAMES = ["common_TE11"]
+PORT_LABELS["common_TE11"] = "common arm, TE11 (monitor only)"
 MM = 1e-3
+
+
+def port_names(p: BoifotParams):
+    """Port names for this configuration, in index order."""
+    return PORT_NAMES + (HOM_PORT_NAMES if p.hom_monitor else [])
+
+
+def n_ports(p: BoifotParams) -> int:
+    return len(port_names(p))
 
 
 @dataclass
@@ -115,6 +126,25 @@ def build_model(p: BoifotParams, excite_port: Optional[int] = None) -> Model:
         )
     )
 
+    # 5: higher-order monitor on the common arm.  The square common arm is
+    # overmoded in band (TE11/TM11 above 29.81 GHz), so any asymmetry in the
+    # drive sends power out through modes the four guide ports cannot see.
+    # Monitoring TE11 turns that missing power into an accounted channel.
+    # TM11 is not covered: openEMS's rectangular port supports TE modes only.
+    if p.hom_monitor:
+        ports.append(
+            FDTD.AddRectWaveGuidePort(
+                5,
+                [-p.a_o / 2, -ys, z_c_exc],
+                [p.a_o / 2, ys, z_c_meas],
+                "z",
+                a_m,
+                a_m,
+                "TE11",
+                0,
+            )
+        )
+
     deembed = [
         abs(z_c_meas - p.z_tip),
         abs(z_c_meas - p.z_tip),
@@ -122,6 +152,8 @@ def build_model(p: BoifotParams, excite_port: Optional[int] = None) -> Model:
         abs(x_s_meas - p.a_o / 2.0),
         abs(x_s_meas - p.a_o / 2.0),
     ]
+    if p.hom_monitor:
+        deembed.append(abs(z_c_meas - p.z_tip))
     return Model(FDTD=FDTD, CSX=CSX, ports=ports, params=p, deembed_mm=deembed)
 
 
