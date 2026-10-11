@@ -332,6 +332,61 @@ same post is parallel to the main-arm E-field, which is why adding the first
 pin moves the main arm 10.9 dB. The pin is electrically strong; it is strong
 for the other polarisation.
 
+### Septum tip taper: built, and it does what the memo says
+
+The memo's one explicitly stated element that this model lacked. Side-arm
+polarisation, matched mesh, two-layer taper:
+
+| taper | 1.30 | 1.45 | 1.60 | 1.70 | 1.80 | 1.87 |
+|---|---|---|---|---|---|---|
+| blunt (0 mm) | −21.5 | −20.0 | −15.0 | −11.1 | −6.5 | −3.3 |
+| 1.2 mm | −24.4 | −20.9 | −15.0 | −10.8 | −6.1 | −2.9 |
+| 2.5 mm | −24.2 | −20.6 | −14.7 | −10.5 | −5.8 | −2.8 |
+
+About 3 dB at the bottom of the band, nothing above 1.60 f_c. The effect
+**saturates** — 1.2 and 2.5 mm agree within noise — which is the expected
+behaviour of an adiabatic transformer once it is long enough, and makes the
+3 dB credible despite the 7–8 % power error on these runs (the finer mesh
+needed to resolve the taper shortens the timestep, so 90 000 steps covers
+less simulated time).
+
+So the taper behaves as specified. It does not fix the side-arm roll-off,
+which is consistent with the memo framing it as a main-arm feature: the
+1:1 → (1 − dt/a₀):1 transformation is the *main arm's* guide height.
+
+### Tuning is exhausted; what is left is structural
+
+Eleven parameters have now been swept — pin count, diameter, z position, x
+position, span; septum thickness; miter slope; tip finger length and width;
+tip taper length; transformer first-section length. Every one moves the
+side-arm worst case by about a dB and none changes the shape of the curve.
+That consistency is itself the finding: the remaining difference is not
+reachable from the parameters in this model.
+
+Two structural suspects remain, and both are things inferred here rather
+than read from the memo:
+
+1. **The aperture's z-extent.** Set to b₀ from the 45°-miter argument in
+   this README. The memo never states it.
+2. **The mitred edge is a thin-plate boundary, not a solid 45° wall.**
+   Downstream of the septum the side-arm polarisation is evanescent rather
+   than reflected by a conductor, so its reflection plane moves with
+   frequency (1/e depth 1.4 mm at 26.5 GHz, 2.9 mm at 40 GHz, diverging at
+   the 43.7 GHz half-channel cutoff).
+
+The second fits the evidence best. A soft, frequency-dependent reflector
+explains the dispersion, the conductance running away toward the 42 GHz
+cutoffs, and — most tellingly — why *nothing placed in the aperture* changes
+the curve. No lumped element in front of a soft reflector will fix the
+reflector.
+
+Also worth re-examining: whether the memo's pins run along y at all. Here
+they do, which follows from the split-block threading argument, and a y-post
+is parallel to the main-arm field and nearly orthogonal to the side-arm
+field. That matches the measured asymmetry exactly (10.9 dB on the main arm
+from the first pin, ~0 on the side arm) — but Figure 2 shows their pins
+moving *both* arms, which this orientation cannot do.
+
 ### The gap is in the junction, not the compensation
 
 The comparison that matters is against Figure 2 curve 0, the memo's junction
