@@ -257,34 +257,53 @@ The practical lesson for anyone extending this: convergence is
 configuration-dependent. Budget timesteps per case and check the power error
 before believing any comparison.
 
-### Pin count: a trade that runs opposite to the memo
+### Pin count
 
-Matched settings, both converged, 1 pin versus 2 pins per aperture:
+Main arm, matched settings, flush pins, all converged (3.7–4.7 % power
+error):
 
-| | 1 pin | 2 pins |
-|---|---|---|
-| main arm, worst RL | **−23.40 dB** | −17.09 dB |
-| side arm, worst RL | −1.63 dB | **−2.90 dB** |
+| pins | worst RL (in-band) | RL @ 40 GHz | insertion loss |
+|---|---|---|---|
+| 0 | −12.50 dB | −13.75 dB | −0.37 dB |
+| 1 | **−23.40 dB** | −26.30 dB | −0.22 dB |
+| 2 | −17.09 dB | −28.49 dB | −0.19 dB |
+| 3 | −14.16 dB | −28.91 dB | −0.23 dB |
 
-The trade is real and it is the pin count, not the mesh. But the direction is
-the reverse of the memo, which states that as pins are added "the main-arm
-return loss improved while the side-arm return loss gracefully degrades."
+Two things to read here, and they say different things.
 
-The likely explanation is that the multi-pin *placement* here does not match
-theirs, because the memo is ambiguous on exactly this point. For one pair it
-is explicit — "the outer diameter of the pin flush to the side-arm wall
-(i.e. the pins are physically in the common-arm) and centered in the
-side-arm aperture" — and that is what is implemented. For two it says the
-return loss is minimised "when the pins are centered in the aperture formed
-by the side-arm wall", and two pins cannot both sit at the centre. Either
-they are spread along z and centred as a pair (the reading used here), or
-"centered" means centred in *x*, straddling the aperture plane rather than
-sitting flush behind it. Those are different structures. `pin_inset` covers
-both: 0 is flush, −d_pin/2 straddles the plane.
+**The memo's trend is reproduced at the top of the band.** Return loss at
+40 GHz improves monotonically with pin count, −13.75 → −26.30 → −28.49 →
+−28.91 dB, which is the memo's "as the total number of pins is increased
+from zero to the three pairs described, the main-arm return loss improved".
 
-**Until that is settled, use 1 pin.** 1.3 dB on the side arm is not worth
-6.3 dB on the main arm, and the main arm is the part that otherwise matches
-the memo.
+**The worst case over the band peaks at one pin**, because added pins also
+introduce a degradation away from the top of the band. Collapsing the band
+to a single worst-case number therefore shows the reverse trend, which is
+how an earlier revision of this file came to claim the model disagreed with
+the memo. It does not; the metric did.
+
+The zero-pin row is the direct confirmation of what the pins are for: with
+no pins the main arm is at −12.5 dB with 0.37 dB of insertion loss, because
+the side-arm apertures mismatch it. That is the memo's "the pins act as
+symmetric short-circuit waveguide-stubs which tune out the discontinuity due
+to the side-arm ports".
+
+Side-arm return loss moves the other way, −1.63 dB at 1 pin to −2.90 dB at
+2 pins, so the pin count is a genuine two-sided trade.
+
+**Pin placement is first-order, not a detail.** The memo is explicit for one
+pair — "the outer diameter of the pin flush to the side-arm wall (i.e. the
+pins are physically in the common-arm) and centered in the side-arm
+aperture" — but ambiguous for two, where "centered in the aperture" cannot
+put both pins at the centre. Reading it as centred in *x*, straddling the
+aperture plane, instead of flush behind it, is worth 4.6 dB of main-arm
+return loss at two pins (−21.69 vs −17.09 dB). `pin_inset` covers both: 0 is
+flush, −d_pin/2 straddles. Any multi-pin tuning has to state which
+convention it uses.
+
+For a single figure of merit across the whole band, one flush pin is the
+best of those tried. If the top of the band matters most, more pins are
+better.
 
 ### Septum thickness
 
