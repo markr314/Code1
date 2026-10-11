@@ -225,5 +225,37 @@ tip, and it is not free either way:
   which is the better-behaved branch, but the aperture then shifts upstream
   and shortens, so the side-arm guide height moves along with the tip.
 
+### Converged tuning results
+
+Re-run at 50 000 timesteps (mesh 0.40 / 0.24 / 0.10 mm, side-arm polarization
+excitation, 45° miter with the aperture following the tip). Only runs whose
+power error is small are usable:
+
+| case | worst side RL | power error | usable |
+|---|---|---|---|
+| 1 pin (baseline) | −1.64 dB | 3.3 % | yes |
+| **2 pins** | **−2.90 dB** | 2.3 % | yes |
+| 0 pins | +0.69 dB | 17.8 % | no |
+| tip (1.2, 0.8), 1 pin | −3.16 dB | 21.6 % | no |
+
+Two pins beat one by 1.3 dB on worst-case side-arm return loss, and both runs
+are converged, so that comparison stands.
+
+The two unusable runs are still informative, because *what* they fail at is
+consistent: both ring. A positive return loss in dB means |S11| > 1, which is
+nonphysical and is simply the signature of a run stopped while energy was
+still sloshing around. Removing the pins and blunting the tip each make the
+side-arm path ring enough that 50 000 timesteps is not sufficient. Note this
+is the opposite of the main-arm behaviour found earlier, where it was the
+*presence* of the pins that stalled energy decay — so the pins damp the
+side-arm path while loading the main-arm one. That is the same trade the memo
+states ("as the total number of pins is increased ... the main-arm return
+loss improved while the side-arm return loss gracefully degrades"), showing
+up here as a convergence signature rather than as a return-loss number.
+
+The practical lesson for anyone extending this: convergence is
+configuration-dependent. Budget timesteps per case and check the power error
+before believing any comparison.
+
 Separately, the miter angle was swept at 45° ± : slope 0.60 and 1.25 are both
 far worse than 1.00, supporting the 45° miter as the right choice.
