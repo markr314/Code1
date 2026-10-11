@@ -48,7 +48,7 @@ All lengths are in mm, frequencies in Hz.
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 import json
 
 from .waveguide import (
@@ -106,6 +106,15 @@ class BoifotParams:
     pin_d_norm: float = 0.06
     n_pins: int = 1  # pins per aperture
     pin_inset: float = 0.0  # extra |x| offset inward from the flush position
+    # "full": one post spanning the whole common-arm height in y.
+    # "half": a pair of posts per location, each running from the septum
+    # plane out to a broad wall.  These are the same element wherever the
+    # septum is absent, and different wherever it is present, which is the
+    # open question about how the memo's pins are built.
+    pin_span: str = "full"
+    # Explicit pin centres as fractions of the aperture length along z.
+    # None spreads n_pins symmetrically about the aperture centre.
+    pin_z_frac: Optional[Tuple[float, ...]] = None
     pins_enabled: bool = True
     side_arms_enabled: bool = True  # diagnostic: blank off the side arms
 
@@ -128,6 +137,8 @@ class BoifotParams:
             raise ValueError("n_pins must be >= 0")
         if not 0.0 <= self.tip_w < self.a_o / 2.0:
             raise ValueError("tip_w must be in [0, a_o/2)")
+        if self.pin_span not in ("full", "half"):
+            raise ValueError("pin_span must be 'full' or 'half'")
 
     # ---- derived dimensions --------------------------------------------
     @property
@@ -264,6 +275,8 @@ class BoifotParams:
         """Pin centres along z, spread symmetrically about the aperture centre."""
         if not self.pins_enabled or self.n_pins <= 0:
             return []
+        if self.pin_z_frac is not None:
+            return [self.z_ap0 + f * self.ap_len for f in self.pin_z_frac]
         c = 0.5 * (self.z_ap0 + self.z_ap1)
         if self.n_pins == 1:
             return [c]
@@ -358,6 +371,17 @@ class BoifotParams:
                 f"main-arm rejection cutoff {self.fc_main_reject/1e9:.2f} GHz is not "
                 "above the band"
             )
+        if self.pin_span == "half" and self.pins_enabled:
+            for zc in self.pin_z:
+                z_sep_here = self.z_tip + self.slope * max(
+                    abs(self.pin_x) - self.tip_w, 0.0
+                )
+                if not (z_sep_here <= zc <= self.z_sep_end):
+                    w.append(
+                        f"half-height pin at z={zc:.3f} mm has no septum to land "
+                        f"on at |x|={self.pin_x:.3f} mm (septum starts at "
+                        f"z={z_sep_here:.3f}); its inner end is unsupported"
+                    )
         if self.fc_side >= self.f_lo:
             w.append(f"side-arm cutoff {self.fc_side/1e9:.2f} GHz is above f_lo")
         if self.z_tip_end > self.z_ap1 + 1e-9:

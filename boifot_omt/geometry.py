@@ -92,12 +92,17 @@ def build(CSX, p: BoifotParams) -> dict:
     for sgn in (+1, -1):
         for zc in p.pin_z:
             xc = sgn * p.pin_x
-            metal.AddCylinder(
-                priority=PRIO_METAL,
-                start=[xc, -ys, zc],
-                stop=[xc, ys, zc],
-                radius=p.d_pin / 2.0,
-            )
+            if p.pin_span == "half":
+                spans = [(p.dt_sep / 2.0, ys), (-ys, -p.dt_sep / 2.0)]
+            else:
+                spans = [(-ys, ys)]
+            for y0, y1 in spans:
+                metal.AddCylinder(
+                    priority=PRIO_METAL,
+                    start=[xc, y0, zc],
+                    stop=[xc, y1, zc],
+                    radius=p.d_pin / 2.0,
+                )
             pins.append((xc, zc))
 
     return {"x_lim": (-xs, xs), "y_lim": (-ys, ys), "z_lim": (p.z_min, p.z_max),
