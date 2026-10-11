@@ -68,8 +68,16 @@ def build(CSX, p: BoifotParams) -> dict:
     # the side-arm polarisation this edge is the pair of back-to-back miters
     # that divides the power between the two side arms.
     if p.dt_sep > 0:
-        z_pts = [p.z_tip, p.z_tip_end, p.z_sep_end, p.z_sep_end, p.z_tip_end]
-        x_pts = [0.0, p.a_o / 2, p.a_o / 2, -p.a_o / 2, -p.a_o / 2]
+        if p.tip_w > 0.0 or p.tip_len > 0.0:
+            # blunt leading finger (Sigma_1 long, 2*Sigma_2 wide) ahead of the
+            # mitred wedge
+            z_pts = [p.z_tip, p.z_tip, p.z_tip_end, p.z_sep_end,
+                     p.z_sep_end, p.z_tip_end]
+            x_pts = [-p.tip_w, p.tip_w, p.a_o / 2, p.a_o / 2,
+                     -p.a_o / 2, -p.a_o / 2]
+        else:
+            z_pts = [p.z_tip, p.z_tip_end, p.z_sep_end, p.z_sep_end, p.z_tip_end]
+            x_pts = [0.0, p.a_o / 2, p.a_o / 2, -p.a_o / 2, -p.a_o / 2]
         metal.AddLinPoly(
             priority=PRIO_METAL,
             points=np.array([z_pts, x_pts]),
@@ -110,6 +118,8 @@ def mesh_lines(p: BoifotParams) -> dict:
 
     # ---------------- hard: material boundaries --------------------------
     hx = {-p.x_side_end, p.x_side_end, -p.a_o / 2.0, p.a_o / 2.0}
+    if p.tip_w > 0.0:
+        hx.update({-p.tip_w, p.tip_w})
     if p.pins_enabled and p.n_pins > 0:
         for sgn in (+1, -1):
             hx.update({sgn * (p.pin_x - p.d_pin / 2.0), sgn * (p.pin_x + p.d_pin / 2.0)})
@@ -122,8 +132,8 @@ def mesh_lines(p: BoifotParams) -> dict:
     else:
         hy.add(0.0)
 
-    hz = {p.z_min, p.z_max, p.z_tip, p.z_tip_end, p.z_ap1, p.z_trans0, p.z_trans1,
-          p.z_sep_end}
+    hz = {p.z_min, p.z_max, p.z_tip, p.z_tip_end, p.z_ap0, p.z_ap1, p.z_trans0,
+          p.z_trans1, p.z_sep_end}
     for i in range(p.n_steps + 1):
         hz.add(p.z_trans0 + i * p.step_len)
     for zc in p.pin_z:

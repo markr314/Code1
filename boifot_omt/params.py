@@ -72,11 +72,17 @@ class BoifotParams:
     # ---- septum (memo: 0.02 < dt/a_o < 0.05) ----------------------------
     dt_sep_norm: float = 0.035
     miter_slope: float = 1.0  # dz/dx of the tip edge; 1.0 is a 45 deg miter
+    # Septum tip (the memo's Sigma_1 / Sigma_2, Fig. 1): a blunt leading
+    # finger ahead of the mitred wedge.  Its length and width set the
+    # upper/lower band-edge resonances of the double-tuned side-arm match.
+    tip_len: float = 0.0  # finger length upstream of the aperture plane
+    tip_w: float = 0.0  # finger half-width in x
     sep_overhang: float = 2.0  # septum length past the end of the transformer
 
     # ---- side-arm aperture ---------------------------------------------
     # full height in y; the z extent is the side-arm guide height
     ap_len_norm: float = 1.0  # aperture z extent, in units of b_o
+    ap_from_tip: bool = True  # tie the aperture to the tip, see ap_len
     side_len: float = 14.0  # straight side-arm run from the aperture outward
 
     # ---- main-arm transformer (memo: 4-step, 2:1, w_q=0.84, f_o/f_c=1.565)
@@ -110,6 +116,8 @@ class BoifotParams:
             raise ValueError("dt_sep_norm out of range")
         if self.n_pins < 0:
             raise ValueError("n_pins must be >= 0")
+        if not 0.0 <= self.tip_w < self.a_o / 2.0:
+            raise ValueError("tip_w must be in [0, a_o/2)")
 
     # ---- derived dimensions --------------------------------------------
     @property
@@ -122,26 +130,39 @@ class BoifotParams:
 
     @property
     def ap_len(self) -> float:
-        """Side-arm aperture extent along z (= side-arm guide height)."""
+        """Side-arm aperture extent along z (= side-arm guide height).
+
+        With `ap_from_tip`, the aperture runs from the septum's leading edge
+        to the point where the mitred wedge reaches the side walls, so the
+        septum only ever spans the full guide width *downstream* of the
+        aperture.  Letting the wedge reach full width inside the aperture
+        splits it in two in y, puts both halves below cutoff and reflects the
+        side-arm polarisation almost completely.  With tip_len = tip_w = 0
+        this reduces to a_o/2 = b_o.
+        """
+        if self.ap_from_tip:
+            return self.ap_len_norm * self.miter_slope * (
+                self.a_o / 2.0 - self.tip_w
+            )
         return self.ap_len_norm * self.b_o
 
     @property
     def z_tip(self) -> float:
-        """Septum tip apex; the origin."""
-        return 0.0
+        """Leading edge of the septum tip (upstream of the aperture plane)."""
+        return -self.tip_len
 
     @property
     def z_tip_end(self) -> float:
         """z at which the mitred tip edge reaches the side walls."""
-        return self.miter_slope * self.a_o / 2.0
+        return -self.tip_len + self.miter_slope * (self.a_o / 2.0 - self.tip_w)
 
     @property
     def z_ap0(self) -> float:
-        return 0.0
+        return self.z_tip if self.ap_from_tip else 0.0
 
     @property
     def z_ap1(self) -> float:
-        return self.ap_len
+        return self.z_ap0 + self.ap_len
 
     @property
     def fc(self) -> float:
@@ -303,6 +324,12 @@ class BoifotParams:
             )
         if self.fc_side >= self.f_lo:
             w.append(f"side-arm cutoff {self.fc_side/1e9:.2f} GHz is above f_lo")
+        if self.z_tip_end > self.z_ap1 + 1e-9:
+            w.append(
+                "the septum reaches full width inside the side-arm aperture; "
+                "that splits the aperture in y and reflects the side-arm "
+                "polarisation"
+            )
         return w
 
     def to_json(self, path: str) -> None:

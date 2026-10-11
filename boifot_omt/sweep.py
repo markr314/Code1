@@ -209,3 +209,32 @@ def unitarity_report(S: np.ndarray, freq: np.ndarray, band=None) -> str:
             f"max {col.max():.4f}  worst error {max(abs(col.min()-1), abs(col.max()-1))*100:.2f} %"
         )
     return "\n".join(lines)
+
+
+def combine_side_arms(S: np.ndarray):
+    """Fold the two side-arm ports into their even/odd combinations.
+
+    The real OMT recombines the side arms in a power combiner, so the
+    physically driven side-arm port is one of the two symmetry combinations,
+    not either arm on its own.  Returns (S4, labels) for the 4x4 matrix
+
+        0 common main-pol, 1 common side-pol, 2 main arm, 3 side-arm odd mode
+
+    and, as a diagnostic, the even-mode column.  The odd mode is the one the
+    junction couples to the common arm; the even mode is the asymmetric
+    combination, which breaks the junction's twofold symmetry and therefore
+    couples to the overmoded common arm's TE11/TM11, modes these ports do not
+    monitor.
+    """
+    nf = S.shape[0]
+    # basis change on both the drive and response side
+    T = np.zeros((5, 5))
+    T[0, 0] = T[1, 1] = T[2, 2] = 1.0
+    r = 1.0 / np.sqrt(2.0)
+    T[3, 3], T[3, 4] = r, -r  # odd  (anti-phase) combination
+    T[4, 3], T[4, 4] = r, r  # even (in-phase) combination
+    out = np.empty_like(S)
+    for k in range(nf):
+        out[k] = T @ S[k] @ T.T
+    labels = ["common_M", "common_S", "main", "side_odd", "side_even"]
+    return out, labels

@@ -31,26 +31,30 @@ THEME = {
 
 def _panel(ax, x, series, t, ylabel, ylim):
     """One panel: at most two series, direct-labelled, with a legend."""
-    for (label, y, color) in series:
-        ax.plot(x, y, color=color, linewidth=2.0, label=label, solid_capstyle="round")
-        # direct label at the right-hand end, in ink with a colored dot
-        i = np.isfinite(y)
-        if i.any():
-            xi, yi = x[i][-1], y[i][-1]
-            ax.plot([xi], [yi], marker="o", ms=4, color=color, clip_on=False)
-            ax.annotate(
-                f" {label}", (xi, yi), color=t["ink"], fontsize=8,
-                va="center", ha="left", annotation_clip=False,
-            )
-    ax.set_ylabel(ylabel, color=t["ink2"], fontsize=9)
     ax.set_ylim(*ylim)
+    # headroom on the right so the direct labels sit inside the axes
+    span = x[-1] - x[0]
+    ax.set_xlim(x[0] - 0.01 * span, x[-1] + 0.13 * span)
+    for (label, y, color) in series:
+        ax.plot(x, y, color=color, linewidth=2.0, label=label,
+                solid_capstyle="round")
+        # label the last point that is actually on-scale, so a curve running
+        # off the bottom does not drag its label out of the figure
+        ok = np.isfinite(y) & (y >= ylim[0]) & (y <= ylim[1])
+        if ok.any():
+            j = np.nonzero(ok)[0][-1]
+            ax.plot([x[j]], [y[j]], marker="o", ms=4, color=color, zorder=5)
+            ax.annotate(" " + label, (x[j], y[j]), color=t["ink"], fontsize=8,
+                        va="center", ha="left", xytext=(5, 0),
+                        textcoords="offset points", zorder=5)
+    ax.set_ylabel(ylabel, color=t["ink2"], fontsize=9)
     ax.grid(True, color=t["grid"], linewidth=0.6, alpha=0.9)
     ax.set_axisbelow(True)
     ax.set_facecolor(t["surface"])
-    for s in ax.spines.values():
-        s.set_color(t["grid"])
+    for sp in ax.spines.values():
+        sp.set_color(t["grid"])
     ax.tick_params(colors=t["ink2"], labelsize=8)
-    leg = ax.legend(loc="lower right", fontsize=8, framealpha=0.0, ncol=2)
+    leg = ax.legend(loc="lower left", fontsize=8, framealpha=0.0, ncol=2)
     for txt in leg.get_texts():
         txt.set_color(t["ink"])
 
@@ -75,13 +79,13 @@ def plot(freq, S, p: BoifotParams, out_png: str, mode: str = "light") -> None:
         axes[1], x,
         [("main arm", m["main_il_dB"], t["s1"]),
          ("side arms, combined", m["side_sum_dB"], t["s2"])],
-        t, "Transmission (dB)", (-3.0, 0.3),
+        t, "Transmission (dB)", (-4.0, 0.3),
     )
     _panel(
         axes[2], x,
         [("side pol → main arm", m["iso_sidepol_to_main_dB"], t["s1"]),
          ("main pol → side arm", m["iso_mainpol_to_side_p_dB"], t["s2"])],
-        t, "Isolation (dB)", (-90, 0),
+        t, "Isolation (dB)", (-180, 0),
     )
 
     axes[2].set_xlabel(

@@ -3,3 +3,4 @@ __pycache__/
 results/
 *.h5
 *.vtk
+results/**/exc_*/
