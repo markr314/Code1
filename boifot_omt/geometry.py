@@ -69,23 +69,30 @@ def build(CSX, p: BoifotParams) -> dict:
     # the side-arm polarisation this edge is the pair of back-to-back miters
     # that divides the power between the two side arms.
     if p.dt_sep > 0:
-        if p.tip_w > 0.0 or p.tip_len > 0.0:
-            # blunt leading finger (Sigma_1 long, 2*Sigma_2 wide) ahead of the
-            # mitred wedge
-            z_pts = [p.z_tip, p.z_tip, p.z_tip_end, p.z_sep_end,
-                     p.z_sep_end, p.z_tip_end]
-            x_pts = [-p.tip_w, p.tip_w, p.a_o / 2, p.a_o / 2,
-                     -p.a_o / 2, -p.a_o / 2]
-        else:
-            z_pts = [p.z_tip, p.z_tip_end, p.z_sep_end, p.z_sep_end, p.z_tip_end]
-            x_pts = [0.0, p.a_o / 2, p.a_o / 2, -p.a_o / 2, -p.a_o / 2]
-        metal.AddLinPoly(
-            priority=PRIO_METAL,
-            points=np.array([z_pts, x_pts]),
-            norm_dir=1,
-            elevation=-p.dt_sep / 2.0,
-            length=p.dt_sep,
-        )
+        def tip_poly(dz: float):
+            """Septum footprint in the (z, x) plane, shifted dz downstream."""
+            if p.tip_w > 0.0 or p.tip_len > 0.0:
+                z_pts = [p.z_tip + dz, p.z_tip + dz, p.z_tip_end + dz,
+                         p.z_sep_end, p.z_sep_end, p.z_tip_end + dz]
+                x_pts = [-p.tip_w, p.tip_w, p.a_o / 2, p.a_o / 2,
+                         -p.a_o / 2, -p.a_o / 2]
+            else:
+                z_pts = [p.z_tip + dz, p.z_tip_end + dz, p.z_sep_end,
+                         p.z_sep_end, p.z_tip_end + dz]
+                x_pts = [0.0, p.a_o / 2, p.a_o / 2, -p.a_o / 2, -p.a_o / 2]
+            return np.array([z_pts, x_pts])
+
+        layers = p.taper_layers
+        if not layers:
+            layers = [(p.dt_sep / 2.0, 0.0)]
+        for half_t, dz in layers:
+            metal.AddLinPoly(
+                priority=PRIO_METAL,
+                points=tip_poly(dz),
+                norm_dir=1,
+                elevation=-half_t,
+                length=2.0 * half_t,
+            )
 
     # --- compensation pins -------------------------------------------------
     pins = []
@@ -135,6 +142,8 @@ def mesh_lines(p: BoifotParams) -> dict:
         hy.update({-h / 2.0, h / 2.0})
     if p.dt_sep > 0:
         hy.update({-p.dt_sep / 2.0, p.dt_sep / 2.0})
+        for half_t, _ in p.taper_layers:
+            hy.update({-half_t, half_t})
     else:
         hy.add(0.0)
 
@@ -147,6 +156,8 @@ def mesh_lines(p: BoifotParams) -> dict:
         hz.add(za)
     for zc in p.pin_z:
         hz.update({zc - p.d_pin / 2.0, zc + p.d_pin / 2.0})
+    for _, dz in p.taper_layers:
+        hz.update({p.z_tip + dz, p.z_tip_end + dz})
 
     # ---------------- soft: local refinement ------------------------------
     sx, sy, sz = set(), set(), set()

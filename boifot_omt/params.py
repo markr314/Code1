@@ -78,6 +78,16 @@ class BoifotParams:
     tip_len: float = 0.0  # finger length upstream of the aperture plane
     tip_w: float = 0.0  # finger half-width in x
     sep_overhang: float = 2.0  # septum length past the end of the transformer
+    # Septum tip thickness taper.  The memo: "the septum tip forms an
+    # adiabatic impedance transformer from 1:1 guide to (1 - dt/a_o):1".
+    # Upstream of the septum the main-arm polarisation sees the full height
+    # a_o; where the septum is at full thickness it sees a_o - dt.  A blunt
+    # tip steps between those, a tapered tip transitions gradually.  The
+    # taper runs `tip_taper_len` along z *behind the mitred leading edge*, so
+    # it follows the edge contour rather than a plane, and is built as
+    # `tip_taper_steps` stacked layers.  0 disables it (a blunt tip).
+    tip_taper_len: float = 0.0
+    tip_taper_steps: int = 3
 
     # ---- side-arm aperture ---------------------------------------------
     # full height in y; the z extent is the side-arm guide height
@@ -139,6 +149,10 @@ class BoifotParams:
             raise ValueError("tip_w must be in [0, a_o/2)")
         if self.pin_span not in ("full", "half"):
             raise ValueError("pin_span must be 'full' or 'half'")
+        if self.tip_taper_len < 0:
+            raise ValueError("tip_taper_len must be >= 0")
+        if self.tip_taper_steps < 1:
+            raise ValueError("tip_taper_steps must be >= 1")
 
     # ---- derived dimensions --------------------------------------------
     @property
@@ -187,6 +201,26 @@ class BoifotParams:
     def z_tip(self) -> float:
         """Leading edge of the septum tip (upstream of the aperture plane)."""
         return -self.tip_len
+
+    @property
+    def taper_layers(self) -> List[Tuple[float, float]]:
+        """(half_thickness, z_offset) per layer of the tapered tip.
+
+        Layer k carries thickness dt*k/N and begins dt_len*k/N behind the
+        leading edge, so their union staircases a linear thickness ramp from
+        a knife edge up to the full septum.  An empty list means a blunt tip.
+        """
+        if self.tip_taper_len <= 0 or self.dt_sep <= 0:
+            return []
+        n = self.tip_taper_steps
+        if n == 1:
+            return [(0.5 * self.dt_sep, 0.0)]
+        # thinnest layer starts at the apex so the tip is a knife edge, not a
+        # gap; the full-thickness layer starts exactly tip_taper_len behind it
+        return [
+            (0.5 * self.dt_sep * k / n, self.tip_taper_len * (k - 1) / (n - 1))
+            for k in range(1, n + 1)
+        ]
 
     @property
     def z_tip_end(self) -> float:
@@ -319,6 +353,17 @@ class BoifotParams:
             f" (dt/a_o = {self.dt_sep_norm:.3f}), tip edge reaches the wall at"
             f" z = {self.z_tip_end:.3f} mm",
             f"  septum ends at            : z = {self.z_sep_end:.2f} mm",
+            f"  septum tip                : finger {self.tip_len:.3f} mm long,"
+            f" half-width {self.tip_w:.3f} mm, leading edge z = {self.z_tip:.3f} mm",
+            f"  septum tip taper          : "
+            + (
+                f"{self.tip_taper_len:.3f} mm over {self.tip_taper_steps} layers, "
+                + "thicknesses "
+                + ", ".join("%.4f" % (2 * h) for h, _ in self.taper_layers)
+                + " mm"
+                if self.taper_layers
+                else "none (blunt tip)"
+            ),
             f"  side-arm aperture         : z = {self.z_ap0:.2f} .. {self.z_ap1:.2f} mm,"
             f" full height in y",
             f"  transformer               : {self.n_steps}-step,"

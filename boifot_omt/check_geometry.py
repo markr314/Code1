@@ -50,13 +50,15 @@ def occupancy(p: BoifotParams, lines=None):
 
     # metal back in: septum (mitred wedge) and pins
     if p.dt_sep > 0:
-        sy = np.abs(cy) < p.dt_sep / 2
-        wedge = (cz[None, :] >= p.z_tip + p.slope * np.maximum(
-            np.abs(cx) - p.tip_w, 0.0)[:, None]) & (
-            cz[None, :] <= p.z_sep_end
-        )
         inx = np.abs(cx) <= p.a_o / 2
-        air &= ~(inx[:, None, None] & sy[None, :, None] & wedge[:, None, :])
+        edge = p.z_tip + p.slope * np.maximum(np.abs(cx) - p.tip_w, 0.0)
+        layers = p.taper_layers or [(p.dt_sep / 2.0, 0.0)]
+        for half_t, dz in layers:
+            sy = np.abs(cy) < half_t
+            wedge = (cz[None, :] >= (edge + dz)[:, None]) & (
+                cz[None, :] <= p.z_sep_end
+            )
+            air &= ~(inx[:, None, None] & sy[None, :, None] & wedge[:, None, :])
     for sgn in (+1, -1):
         for zc in p.pin_z:
             r = p.d_pin / 2
