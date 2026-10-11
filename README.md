@@ -305,6 +305,60 @@ For a single figure of merit across the whole band, one flush pin is the
 best of those tried. If the top of the band matters most, more pins are
 better.
 
+### Pin geometry is not the lever for the side-arm match
+
+Six pin variants, side-arm polarisation, 90 000 timesteps, S-parameters
+saved. Return loss in dB, sampled at the memo's own Figure 2 x-axis so the
+curve *shapes* can be compared rather than a worst-case scalar:
+
+| case | 1.30 | 1.45 | 1.60 | 1.70 | 1.80 | 1.87 |
+|---|---|---|---|---|---|---|
+| full post, centre, flush | −21.3 | −19.6 | −14.7 | −10.7 | −6.1 | −2.9 |
+| diameter 0.07 a₀ | −21.0 | −19.6 | −14.5 | −10.4 | −5.8 | −2.7 |
+| moved upstream (z 0.25) | −18.6 | −17.9 | −13.9 | −10.1 | −5.3 | −1.3 |
+| moved downstream (z 0.75) | −23.2 | −21.1 | −15.7 | −11.3 | −6.0 | −2.3 |
+| half-height, on the septum | −20.9 | −16.5 | −11.1 | −4.8 | −0.4 | −1.3 |
+| straddling the aperture plane | −21.4 | −19.9 | −14.8 | −10.6 | −5.5 | −2.3 |
+| *memo Fig 2, curve 1* | *≈−22* | *≈−28* | *≈−20* | *≈−18* | *≈−22* | *≈−26* |
+
+Every variant traces the same monotonic collapse, within about 2 dB of the
+others, against a memo curve that stays flat. Diameter across the whole
+allowed range is worth 0.2 dB.
+
+The reason is orientation, and it is not a tuning matter. A post along y is
+perpendicular to the side-arm polarisation's E-field in *both* arms — E ∥ x
+in the common arm, E ∥ z in the side arm — so it barely couples to it. The
+same post is parallel to the main-arm E-field, which is why adding the first
+pin moves the main arm 10.9 dB. The pin is electrically strong; it is strong
+for the other polarisation.
+
+### The gap is in the junction, not the compensation
+
+The comparison that matters is against Figure 2 curve 0, the memo's junction
+with **no pins at all**: it sits near −30 dB at 1.6 f_c. This model, *with* a
+pin, is −14.7 dB there. Their uncompensated junction beats this compensated
+one through mid-band, so the shortfall was never primarily about pins.
+
+The admittance extraction agrees. Looking into the junction from the common
+port, de-embedded:
+
+| f/f_c | \|S11\| | G | B |
+|---|---|---|---|
+| 1.26 | −20.8 dB | 1.09 | +0.17 |
+| 1.57 | −16.3 dB | 1.04 | +0.32 |
+| 1.72 | −10.2 dB | 1.34 | +0.67 |
+| 1.82 | −5.4 dB | 3.04 | +0.87 |
+
+Mid-band the conductance is essentially unity and the mismatch is a
+susceptance of ~0.3 that should not be there in a well-formed junction. Only
+near the top of the band does G run away, and no susceptance — pin, tip or
+otherwise — can pull G back to 1.
+
+Next diagnostic is the unambiguous one: run this junction with no pins and
+compare directly against curve 0, which has no placement ambiguity to argue
+about. If it still falls short mid-band, the discrepancy is in the junction
+proper (septum, miter, aperture), not in any compensating element.
+
 ### Septum thickness
 
 All at 2 pins, 70 000 timesteps, converged (1–4 % power error):
