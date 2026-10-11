@@ -257,5 +257,56 @@ The practical lesson for anyone extending this: convergence is
 configuration-dependent. Budget timesteps per case and check the power error
 before believing any comparison.
 
+### Septum thickness
+
+All at 2 pins, 70 000 timesteps, converged (1–4 % power error):
+
+| dt/a₀ | dt | worst side RL |
+|---|---|---|
+| 0.020 | 0.142 mm | −2.47 dB |
+| 0.035 | 0.249 mm | −2.90 dB |
+| 0.050 | 0.356 mm | −3.30 dB |
+
+Monotonic, and the whole span is 0.8 dB. In *this* structure a thicker
+septum is slightly better, which runs opposite to the memo's remark that
+"the thinner the septa, the easier the structure is to compensate" — but
+that remark is about ease of compensation in a tuned design, and this one is
+under-tuned, so the two are not in direct conflict. Worth revisiting once a
+proper compensation exists.
+
+### Where the side-arm match actually stands
+
+Every knob tried so far moves worst-case side-arm return loss by about a dB,
+and they look roughly independent:
+
+| knob | range tried | effect |
+|---|---|---|
+| pin count | 1 → 2 | 1.3 dB |
+| septum thickness | 0.02 → 0.05 a₀ | 0.8 dB |
+| miter slope | 0.6 / 1.0 / 1.25 | 45° strongly preferred |
+| septum tip | blunt finger | no usable gain; makes the structure ring |
+
+Best converged configuration so far is 2 pins with dt/a₀ = 0.05, at
+−3.30 dB. The memo measures roughly −20 dB across the band, so about 17 dB
+is unaccounted for, and crucially **the shape has not changed** under any of
+these: matched at the band bottom, rolling off monotonically toward 1.9 f_c.
+That is the signature of an uncompensated dispersive termination, not of a
+mistuned resonator.
+
+Closing it is unlikely to come from more one-at-a-time sweeps. Two routes
+look better:
+
+1. **Extract the equivalent reactance.** The junction is well matched at the
+   band bottom and degrades smoothly, so fit the junction susceptance versus
+   frequency from the simulated S11 and design the pin/tip compensation
+   against that, using FDTD only to verify. Far cheaper than a blind search.
+2. **Use a frequency-domain solver for the tuning loop.** The memo optimized
+   this in HFSS. Each converged FDTD run here costs 10–20 minutes, and a
+   genuine multi-parameter search over tip length, tip width, pin count, pin
+   diameter and pin position needs hundreds of them. FEM or mode-matching on
+   a junction this small is seconds per point; FDTD is the wrong tool for
+   the optimization inner loop, even though it is a good one for the final
+   verification.
+
 Separately, the miter angle was swept at 45° ± : slope 0.60 and 1.25 are both
 far worse than 1.00, supporting the 45° miter as the right choice.
