@@ -274,6 +274,48 @@ that remark is about ease of compensation in a tuned design, and this one is
 under-tuned, so the two are not in direct conflict. Worth revisiting once a
 proper compensation exists.
 
+### Transformer section lengths
+
+All four sections are one quarter guide wavelength, 2.954 mm. That is correct
+for this transformer rather than a simplification: the steps change only the
+height, which is the E-plane dimension, so the cutoff stays pinned by a₀ and
+λg is identical in every section. An H-plane (width) transformer would need a
+different length per section.
+
+`first_step_len` exists to override the first section alone, because ideal
+small-reflection theory treats each junction as a perfect impedance step
+while each real step carries a shunt susceptance — and the first section is
+the odd one out, since it faces the junction (aperture, septum tip, pins)
+rather than a plain guide. Swept at 2 pins:
+
+| first section | worst side RL | worst main RL | main RL @ 40 GHz |
+|---|---|---|---|
+| 1.5 mm | −2.50 dB (18 % err, unusable) | — | — |
+| **2.954 mm (λg/4)** | **−2.90 dB** | **−17.09 dB** | **−28.49 dB** |
+| 4.5 mm | −2.74 dB | −16.47 dB | −18.91 dB |
+| 6.0 mm | −2.67 dB | — | — |
+
+**Keep them equal.** Stretching the first section gains nothing on the side
+arm and costs the main arm 9.6 dB at the top of the band, where breaking the
+quarter-wave synthesis hurts most.
+
+The side-arm result is the more interesting one, because it is a clean
+negative. 1.5 → 6.0 mm walks the main-arm termination through more than half
+a guide wavelength of phase, and the side-arm worst case moves by 0.2 dB.
+So the side-arm match is *not* sensitive to where the transformer sits, which
+corrects an earlier reading of the memo's "dispersive reflective termination"
+as a movable short whose phase could be tuned. It cannot be: the side-arm
+polarisation is evanescent in the half-channels downstream of the septum with
+a 1/e depth of 1.4–2.9 mm, so by the first step boundary it has already
+decayed one to two e-foldings and the steps are screened. What the side arm
+sees is the cutoff region at the septum itself, and the dispersion is in the
+evanescent decay, not in a repositionable short.
+
+That rules out first-step length, `trans_gap` and transformer placement as
+routes to the side-arm match. Whatever compensates it has to sit where the
+field is still strong — inside the aperture, which leaves the septum tip and
+the pins.
+
 ### Where the side-arm match actually stands
 
 Every knob tried so far moves worst-case side-arm return loss by about a dB,
