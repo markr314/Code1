@@ -181,3 +181,33 @@ Note that *physical* trapped-mode resonances are a real feature of this
 junction, not only a numerical one — the memo measures them (its Fig. 10) and
 ties them to septum-tip deformation and pin asymmetry. A perfectly symmetric
 model should not excite them.
+
+## Septum-tip tuning: first sweep
+
+Coarse-mesh sweep (0.40/0.24/0.08 mm, side-arm polarization excitation only,
+81 points), reporting the worst in-band side-arm return loss:
+
+| tip_len, tip_w (mm) | worst side RL | worst side IL | power error |
+|---|---|---|---|
+| 0, 0 (plain 45° wedge) | −1.80 dB | −4.71 dB | 2.6 % |
+| 0.6, 0.4 | −2.63 dB | −3.55 dB | 12.4 % |
+| 1.2, 0.4 | −2.73 dB | −3.27 dB | 17.8 % |
+| 0.6, 0.8 | −3.57 dB | −2.64 dB | 10.2 % |
+| 1.2, 0.8 | −3.60 dB | −2.62 dB | 10.3 % |
+| 2.0, 0.6 | −3.07 dB | −2.76 dB | 15.8 % |
+
+The trend is monotonic in tip width and roughly saturates in tip length, but
+the improvement is small and nowhere near the ~20 dB the memo measures.
+
+**Treat these numbers as indicative only.** Every tip case carries a 10–18 %
+power error against the baseline's 2.6 %, so they are not converged, and the
+spread between them is comparable to that error. A blunt tip also shifts the
+aperture upstream and shortens it, which changes the side-arm guide height at
+the same time — the sweep is not a clean one-variable study. Before drawing
+conclusions, these need re-running at the production mesh with enough
+timesteps to meet the energy criterion, and the source of the extra power
+error needs to be identified (most likely coupling into the overmoded common
+arm's higher-order modes, which these ports do not monitor).
+
+Separately, the miter angle was swept at 45° ± : slope 0.60 and 1.25 are both
+far worse than 1.00, supporting the 45° miter as the right choice.
