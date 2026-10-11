@@ -1,154 +1,183 @@
 # 4-port Bøifot orthomode junction in openEMS (WR-28, 26.5–40 GHz)
 
-A parameterized openEMS (FDTD) model of a 4-port Bøifot orthomode junction and
-the harness that extracts its modal S-parameters.
+A parameterized openEMS (FDTD) model of a 4-port Bøifot orthomode junction,
+built to the geometry described in E.J. Wollack, W. Grammer and J. Kingsley,
+*The Bøifot Orthomode Junction*, ALMA Memo 425 (2002), and the harness that
+extracts its modal S-parameters.
 
-**Status: the simulation framework is built and validated; the junction
-geometry is not yet correct.** See [Current state](#current-state) below —
-the published geometry from Wollack, Grammer & Kingsley is needed to finish it.
+## How the junction works
 
-## Port definition
+The Bøifot junction is a turnstile junction with two of its four side ports
+folded parallel to the common arm (memo, Fig. 1). **Both** polarizations leave
+as *pairs* of channels, which is what makes it twofold symmetric and therefore
+broadband — the symmetry keeps TE11/TM11 from being excited in the overmoded
+square common arm.
 
-A Bøifot junction is natively a 4-port device whose common port is dual-mode,
-so the S-matrix is 5x5 in modal terms:
+```
+        y  (normal to the split plane; the septum lies in y = 0)
+        |      side arm  <--[ aperture ]   [ aperture ]--> side arm
+        |                        \   junction   /
+        +---- x                   \           /
+       /                   common arm ===> main arm (4-step 2:1 transformer)
+      z  (common-arm / main-arm axis)
+```
+
+* **Main arm** — E ∥ y, normal to the septum. A thin septum is invisible to
+  it, so it passes as two half-height channels that recombine. The septum tip
+  tapers the guide adiabatically from 1:1 to (1 − dt/a₀):1, then a four-step
+  2:1 Chebyshev transformer takes the full height from a₀ down to standard
+  b₀ = a₀/2.
+* **Side arms** — E ∥ x, lying in the septum plane. The septum shorts this
+  polarization, and its **mitred leading edge acts as two back-to-back miters**
+  that divide the power between the two side arms through full-height
+  apertures in the x = ±a₀/2 walls. Downstream of the tip this polarization is
+  below cutoff in the half-height channels, so the main arm is a reflective
+  termination for it.
+* **Pins** — posts along y standing in the common arm, flush with the side-arm
+  wall and centred in the aperture. For the main-arm polarization they are
+  short-circuit stubs that tune out the side-arm discontinuity and restore a
+  low-impedance return path for the main-arm currents.
+
+The split-block plane (y = 0) is simultaneously the main arm's H-plane and the
+side arms' E-plane — which is why the septum is a shim clamped between the two
+block halves, and why the memo notes the main-arm loss is sensitive to the
+quality of the block mate while the side-arm loss is not.
+
+### The constraint that makes the geometry non-obvious
+
+A polarization couples strongly out of a wall only where its E-field is
+*normal* to that wall, while the septum shorts whichever polarization lies
+*in* its plane. Those two requirements pull against each other, and the
+mitred septum tip is what reconciles them: the side-arm polarization has its
+E-field normal to the aperture walls and maximal right at the septum plane,
+exactly where the miter steers it outward.
+
+## Ports
+
+The common port is dual-mode, so the 4-port junction is a 5×5 modal S-matrix:
 
 | idx | port | mode |
-|----|------|------|
-| 0 | common square guide, polH | E along x |
-| 1 | common square guide, polV | E along y |
-| 2 | main arm | — |
-| 3 | side arm, +x | — |
-| 4 | side arm, −x | — |
+|-----|------|------|
+| 0 | common arm, main-arm pol | E ∥ y |
+| 1 | common arm, side-arm pol | E ∥ x |
+| 2 | main arm | E ∥ y |
+| 3 | side arm, +x | E ∥ z, broad dimension along y |
+| 4 | side arm, −x | E ∥ z, broad dimension along y |
 
-The two side arms are brought out separately; combining them (E-plane tee or
-magic-T) is left outside this model.
+The side arms are brought out separately; combining them (the memo's E-plane
+power combiner, its Table 1 case "B") is outside this model.
 
-## Band and sizing (WR-28)
+## Design values (WR-28)
 
-| quantity | value |
-|---|---|
-| band | 26.5–40 GHz |
-| common square guide | 7.112 x 7.112 mm |
-| common guide TE10/TE01 cutoff | 21.08 GHz |
-| common guide TE11/TM11 cutoff | 29.81 GHz (overmoded in band; held off by symmetry) |
-| main arm | 3.556 (x) x 7.112 (y) mm |
-| main arm operating cutoff | 21.08 GHz |
-| main arm rejected-pol cutoff | 42.15 GHz |
-| side arms | 3.556 (y) x 7.112 (z) mm |
+Scaled from the memo's normalized rules. Its design band is 1.2–1.9 f_c, and
+WR-28 at 26.5–40 GHz is 1.26–1.90 f_c — a near-exact fit.
 
-A square common guide of side 7.112 mm steps directly into standard WR-28 and
-is the natural choice for this band, but note it is overmoded above
-29.81 GHz. The junction's two-fold symmetry is what keeps TE11/TM11
-unexcited, so symmetry errors (machining asymmetry, a mis-centred septum)
-show up as cross-polarisation.
+| quantity | value | memo rule |
+|---|---|---|
+| a₀ (square common arm, broadwall) | 7.112 mm | WR-28 |
+| f_c | 21.077 GHz | |
+| b₀ (main arm, side arms) | 3.556 mm | a₀/2 |
+| septum thickness dt | 0.249 mm | 0.02 < dt/a₀ < 0.05 → 0.035 |
+| pin diameter | 0.427 mm | 0.05 < d/a₀ < 0.07 → 0.060 |
+| pins per aperture | 1, flush to the side-arm wall, centred | memo's one-pair optimum |
+| septum tip miter | 45°, reaching the side walls at z = 3.556 mm | |
+| side-arm aperture | full height in y × 3.556 mm in z | |
+| main-arm transformer | 4 steps × 2.954 mm | 2:1 Chebyshev, w_q = 0.84, f_o/f_c = 1.565 |
+| section heights | 6.648, 5.617, 4.503, 3.804 mm | → 3.556 |
+| transformer design ripple | 40.4 dB return loss | |
+
+The 45° miter and the aperture length are self-consistent: the tip edge
+reaches the side wall at exactly z = a₀/2 = b₀, which is the aperture's own
+length along z.
 
 ## Layout
 
 ```
-boifot_omt/waveguide.py   WR table, cutoff / beta / wave impedance / wall loss
-boifot_omt/params.py      BoifotParams: every dimension, plus electrical checks
-boifot_omt/geometry.py    CSXCAD primitives and the critical mesh lines
-boifot_omt/model.py       FDTD setup, boundaries, the five modal ports
-boifot_omt/sweep.py       per-excitation runs, S-matrix, de-embedding, metrics
-scripts/run_omt.py        CLI sweep driver
-scripts/validate_wr28.py  analytic validation of the port/mesh/PML setup
+boifot_omt/waveguide.py       WR table, cutoff/beta/impedance, Chebyshev synthesis
+boifot_omt/params.py          every dimension in one dataclass, with electrical checks
+boifot_omt/geometry.py        CSXCAD primitives and the critical mesh lines
+boifot_omt/model.py           FDTD setup, boundaries, the five modal ports
+boifot_omt/check_geometry.py  solver-free flood-fill check for trapped cavities
+boifot_omt/sweep.py           runs, S-matrix, de-embedding, metrics, power conservation
+scripts/run_omt.py            CLI sweep driver
+scripts/report.py             summary + plots from a finished sweep
+scripts/plot_results.py       reflection / transmission / isolation panels
+scripts/validate_wr28.py      analytic validation of the port/mesh/PML setup
 ```
 
 Geometry is built by filling the domain with metal and carving the guide
-volumes out of it with higher-priority "air" primitives; the septum and pins
-go back in as metal at higher priority still. The junction is then a handful
-of boxes rather than an assembly of walls.
+volumes out of it with higher-priority "air" primitives; the septum (a linear
+extruded polygon, so the mitred tip is one primitive) and the pins go back in
+as metal at higher priority still.
 
 ## Running it
 
-openEMS is not on PyPI and has no Ubuntu package; it has to be built from
-source (`openEMS-Project`, `./update_openEMS.sh <prefix> --python
---disable-GUI`), which installs the Python bindings into a venv under
-`<prefix>/venv`. Use that interpreter:
+openEMS is not on PyPI and has no Ubuntu package, so it must be built from
+source; the Python bindings install into a venv:
 
 ```bash
-$PREFIX/venv/bin/python3 scripts/validate_wr28.py            # analytic check
-$PREFIX/venv/bin/python3 scripts/run_omt.py --out results/wr28
+git clone --recursive https://github.com/thliebig/openEMS-Project.git
+cd openEMS-Project && ./update_openEMS.sh $PREFIX --python --disable-GUI
 ```
 
-Useful options: `--excite 0,1` (subset of excitations), `--mesh-res`,
-`--mesh-res-fine`, `--t-sep`, `--l-sep`, `--no-pins`, `--d-pin`, `--pin-z`,
-`--n-steps`, `--step-len`, `--nfreq`, `--threads`.
+Then:
 
-Outputs: `sparams.npz`, `sparams.csv`, `boifot_wr28.s5p` (Touchstone),
-`metrics.npz`, `params.json`.
-
-At the default mesh (0.25 mm, 0.09 mm locally) the model is ~1.2 M cells and
-each excitation runs in a few minutes on 4 cores.
-
-### Validation
-
-`scripts/validate_wr28.py` runs a straight WR-28 guide, where the answer is
-analytic, through the identical port/mesh/PML machinery:
-
-```
-|S11| worst     : -44.23 dB
-|S21| worst     : -0.0006 dB
-ZL err worst    : 1.24 %
-S21 phase err   : 1.25 deg over 20.4 mm
+```bash
+$PREFIX/venv/bin/python3 scripts/validate_wr28.py     # analytic check first
+$PREFIX/venv/bin/python3 scripts/run_omt.py --out results/wr28 \
+    --mesh-res 0.30 --mesh-res-junction 0.17 --mesh-res-fine 0.09 --nfreq 201
+$PREFIX/venv/bin/python3 scripts/report.py --results results/wr28
 ```
 
-So the ports, PML and mesh are sound; anything the junction model shows is
-the geometry, not the solver.
+Sweep options: `--excite 0,1`, `--dt-sep-norm`, `--pin-d-norm`, `--n-pins`,
+`--no-pins`, `--miter-slope`, `--sep-overhang`, `--trans-gap`, `--n-steps`,
+`--ap-len-norm`, `--timesteps`, `--threads`.
 
-### A mesh trap worth knowing about
+Outputs: `sparams.npz`, `sparams.csv`, `boifot_wr28.s5p` (5-port Touchstone),
+`metrics.npz`, `params.json`, and light/dark PNGs of the response.
 
-The FDTD timestep is set by the smallest cell anywhere in the mesh. Two
-independently generated refinement ladders landed 0.02 mm apart in the first
-version, which cut the timestep ~20x; the excitation then never completed
-inside the timestep budget and the resulting S-parameters were garbage
-(including a nonphysical +2.4 dB return loss). `geometry.mesh_lines()` now
-separates hard lines (material boundaries, always kept) from soft ones (local
-refinement, dropped when they fall within half a fine cell of a kept line),
-and raises if two material boundaries are closer than the mesh tolerance.
+## Validation and acceptance tests
 
-## Current state
+**Straight-guide validation** (`scripts/validate_wr28.py`) runs a uniform
+WR-28 guide, where the answer is analytic, through the identical port / mesh /
+PML machinery:
 
-The geometry currently implemented is a physics-derived interpretation of the
-Bøifot arrangement, **not** the published one:
+```
+|S11| worst  : -44.23 dB        |S21| worst : -0.0006 dB
+ZL err worst :   1.24 %         phase err   :  1.25 deg over 20.4 mm
+```
 
-- septum in the x=0 plane, transparent to polH (E normal to it), shorting
-  polV (E tangential and in-plane);
-- main arm narrowing in x, which leaves polH's cutoff untouched and puts
-  polV below cutoff;
-- side arms branching along ±x, coupling through apertures in the x=±a_sq/2
-  walls;
-- pins with axes along y standing in each aperture plane.
+**Power conservation** is the acceptance test for a junction run. The
+structure is lossless, so every excited column of the S-matrix must sum to
+1; `scripts/report.py` prints the worst-case error. It catches a truncated
+excitation, energy still trapped when the run stopped, a port with the wrong
+mode or reference plane, and power leaving through the wrong boundary.
 
-A coarse sweep (0.5 mm mesh, excitations 0 and 1) shows this does not work:
+**Trapped-cavity check** (`boifot_omt/check_geometry.py`) rebuilds the air
+volumes analytically on the mesh and flood-fills them from the port planes,
+with no solver involved. An air volume no port can reach rings as a lossless
+cavity and the run never converges.
 
-| quantity | result |
-|---|---|
-| polV return loss | ~0 dB (totally reflected) |
-| polV into the two side arms | −10 to −25 dB (should be ~−3 dB each) |
-| polV → main arm isolation | better than −84 dB |
-| side-arm amplitude imbalance | < 1e-5 dB |
-| side-arm relative phase | 0 deg |
+## Two modelling traps found the hard way
 
-The isolation and symmetry figures confirm the septum and the model's
-symmetry work as intended. The coupling figure identifies the flaw: with a
-septum at x=0, polV is simply *reflected* at the septum's leading edge rather
-than guided into the side arms. Behind the septum the common guide is split
-into 3.466 mm half-channels in which polV is evanescent, with a 1/e decay of
-1.4–2.9 mm across the band, while the apertures run 7.112 mm along z. Most of
-the aperture therefore sits where polV's field has already died away, and the
-apertures are in the walls where polV's E is tangential and near zero to
-begin with.
+**Sliver cells from colliding refinement.** The FDTD timestep is set by the
+smallest cell anywhere in the mesh. Two independently generated refinement
+ladders once landed 0.02 mm apart, cutting the timestep ~20×; the excitation
+then never completed within the timestep budget and the S-parameters were
+garbage, including a nonphysical +2.4 dB return loss. `geometry.mesh_lines()`
+now separates hard lines (material boundaries, always kept) from soft ones
+(refinement, dropped within 0.75 of a fine cell of a kept line) and raises if
+two material boundaries fall closer than the mesh tolerance.
 
-Resolving this needs the actual published arrangement — specifically which
-wall the side-arm apertures are in relative to the septum plane, where the
-septum's leading edge sits relative to the apertures, and the pin geometry.
-Each polarisation couples strongly only through the walls where its E-field
-is *normal*, and the septum shorts whichever polarisation lies in its plane;
-those two constraints pull against each other, and the published geometry is
-what reconciles them.
+**An under-resolved round post rings.** With the pins at the default mesh the
+energy stalled near −33 dB and never decayed. An ablation sweep isolated it to
+the pins (−52 dB without them), and refining showed it weakening monotonically
+(−33.5 → −39.5 → −45.6 dB), the signature of a staircasing artifact: the
+post's discretized surface, tangent to the aperture plane, forms a weakly
+coupled sliver resonator. The pins now carry their own refinement of about
+four cells across the diameter, held out to 1.5 diameters from the surface.
 
-Needed from *The Bøifot Orthomode Junction* (Wollack, Grammer & Kingsley,
-ALMA Memo 425): the junction figure (septum orientation and extent,
-aperture position/size, pin count/diameter/location) and the normalized
-dimension table, which `BoifotParams` is already shaped to accept.
+Note that *physical* trapped-mode resonances are a real feature of this
+junction, not only a numerical one — the memo measures them (its Fig. 10) and
+ties them to septum-tip deformation and pin asymmetry. A perfectly symmetric
+model should not excite them.

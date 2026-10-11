@@ -15,15 +15,7 @@ NP = len(PORT_NAMES)
 
 def port_cutoffs(p: BoifotParams) -> np.ndarray:
     """Cutoff frequency (Hz) of each modal port's operating mode."""
-    return np.array(
-        [
-            p.fc_common,  # common polH
-            p.fc_common,  # common polV
-            p.fc_main,  # main arm
-            p.fc_side,  # side arm +x
-            p.fc_side,  # side arm -x
-        ]
-    )
+    return np.array([p.fc, p.fc, p.fc, p.fc_side, p.fc_side])
 
 
 def run_sweep(
@@ -103,39 +95,41 @@ def metrics(S: np.ndarray, freq: np.ndarray, band=None) -> dict:
             return float("nan")
         return float(np.max(v) if worst == "max" else np.min(v))
 
-    polH_il = db20(S[:, 2, 0])  # common polH -> main arm
-    side_p = S[:, 3, 1]  # common polV -> side arm +x
-    side_m = S[:, 4, 1]  # common polV -> side arm -x
-    polV_sum = db20(np.sqrt(np.abs(side_p) ** 2 + np.abs(side_m) ** 2))
+    main_il = db20(S[:, 2, 0])  # common main-arm pol -> main arm
+    side_p = S[:, 3, 1]  # common side-arm pol -> side arm +x
+    side_m = S[:, 4, 1]  # common side-arm pol -> side arm -x
+    side_sum = db20(np.sqrt(np.abs(side_p) ** 2 + np.abs(side_m) ** 2))
 
     imbal = db20(side_p) - db20(side_m)
     rel_phase = np.angle(side_p / side_m, deg=True)
 
     out = {
         "f_GHz": freq / 1e9,
-        "polH_main_dB": polH_il,
-        "polV_side_sum_dB": polV_sum,
-        "polV_side_p_dB": db20(side_p),
-        "polV_side_m_dB": db20(side_m),
+        "main_il_dB": main_il,
+        "side_sum_dB": side_sum,
+        "side_p_dB": db20(side_p),
+        "side_m_dB": db20(side_m),
         "side_imbalance_dB": imbal,
         "side_rel_phase_deg": rel_phase,
-        "S11_polH_dB": db20(S[:, 0, 0]),
-        "S11_polV_dB": db20(S[:, 1, 1]),
-        "iso_polV_to_main_dB": db20(S[:, 2, 1]),
-        "iso_polH_to_side_p_dB": db20(S[:, 3, 0]),
-        "iso_polH_to_side_m_dB": db20(S[:, 4, 0]),
+        "S11_main_dB": db20(S[:, 0, 0]),
+        "S11_side_dB": db20(S[:, 1, 1]),
+        "iso_sidepol_to_main_dB": db20(S[:, 2, 1]),
+        "iso_mainpol_to_side_p_dB": db20(S[:, 3, 0]),
+        "iso_mainpol_to_side_m_dB": db20(S[:, 4, 0]),
         "xpol_common_dB": db20(S[:, 1, 0]),
         "summary": {},
     }
     out["summary"] = {
-        "worst polH insertion loss (dB)": wc(polH_il, "min"),
-        "worst polV (both arms) loss (dB)": wc(polV_sum, "min"),
-        "worst polH return loss (dB)": wc(out["S11_polH_dB"], "max"),
-        "worst polV return loss (dB)": wc(out["S11_polV_dB"], "max"),
-        "worst polV->main isolation (dB)": wc(out["iso_polV_to_main_dB"], "max"),
-        "worst polH->side isolation (dB)": max(
-            wc(out["iso_polH_to_side_p_dB"], "max"),
-            wc(out["iso_polH_to_side_m_dB"], "max"),
+        "worst main-arm insertion loss (dB)": wc(main_il, "min"),
+        "worst side-arm (both) insertion loss (dB)": wc(side_sum, "min"),
+        "worst main-arm return loss (dB)": wc(out["S11_main_dB"], "max"),
+        "worst side-arm return loss (dB)": wc(out["S11_side_dB"], "max"),
+        "worst isolation, side pol -> main arm (dB)": wc(
+            out["iso_sidepol_to_main_dB"], "max"
+        ),
+        "worst isolation, main pol -> side arms (dB)": max(
+            wc(out["iso_mainpol_to_side_p_dB"], "max"),
+            wc(out["iso_mainpol_to_side_m_dB"], "max"),
         ),
         "worst side-arm amplitude imbalance (dB)": wc(np.abs(imbal), "max"),
         "side-arm relative phase, min/max (deg)": (
@@ -174,7 +168,7 @@ def write_touchstone(path: str, freq: np.ndarray, S: np.ndarray) -> None:
     """Write a 5-port Touchstone (.s5p) file, magnitude/angle format."""
     with open(path, "w") as fh:
         fh.write("! 4-port Boifot orthomode junction, modal S-parameters\n")
-        fh.write("! ports: 1=common polH  2=common polV  3=main  4=side+x  5=side-x\n")
+        fh.write("! ports: 1=common main-pol  2=common side-pol  3=main  4=side+x  5=side-x\n")
         fh.write("# GHz S MA R 1\n")
         for k, f in enumerate(freq):
             fh.write(f"{f/1e9:.6f}")
@@ -183,3 +177,35 @@ def write_touchstone(path: str, freq: np.ndarray, S: np.ndarray) -> None:
                     v = S[k, j, i]
                     fh.write(f" {abs(v):.6e} {np.degrees(np.angle(v)):.3f}")
                 fh.write("\n" + (" " * 10 if j < NP - 1 else ""))
+
+
+def unitarity(S: np.ndarray) -> np.ndarray:
+    """Power sum of each excited column: sum_j |S_ji|^2.
+
+    The junction is lossless (PEC walls, air fill), so every column should sum
+    to 1.  This is the acceptance test for a run: it catches truncated
+    excitations, energy still trapped in the structure when the run stopped,
+    a port whose mode or reference plane is wrong, and power leaving through a
+    boundary that should have reflected it.
+    """
+    return np.nansum(np.abs(S) ** 2, axis=1)
+
+
+def unitarity_report(S: np.ndarray, freq: np.ndarray, band=None) -> str:
+    u = unitarity(S)
+    sel = (
+        np.ones(len(freq), bool)
+        if band is None
+        else (freq >= band[0]) & (freq <= band[1])
+    )
+    lines = ["power conservation, sum_j |S_ji|^2 per excited port i:"]
+    for i in range(u.shape[1]):
+        col = u[sel, i]
+        if not np.any(np.isfinite(col)) or np.allclose(col, 0):
+            lines.append(f"  port {i} ({PORT_NAMES[i]:9s}): not excited")
+            continue
+        lines.append(
+            f"  port {i} ({PORT_NAMES[i]:9s}): min {col.min():.4f}  "
+            f"max {col.max():.4f}  worst error {max(abs(col.min()-1), abs(col.max()-1))*100:.2f} %"
+        )
+    return "\n".join(lines)

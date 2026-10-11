@@ -27,14 +27,20 @@ def build_args() -> argparse.ArgumentParser:
     )
     ap.add_argument("--mesh-res", type=float, default=None)
     ap.add_argument("--mesh-res-fine", type=float, default=None)
+    ap.add_argument("--mesh-res-junction", type=float, default=None)
     ap.add_argument("--timesteps", type=int, default=None)
-    ap.add_argument("--t-sep", type=float, default=None)
-    ap.add_argument("--l-sep", type=float, default=None)
+    ap.add_argument("--dt-sep-norm", type=float, default=None,
+                    help="septum thickness / a_o (memo: 0.02-0.05)")
+    ap.add_argument("--pin-d-norm", type=float, default=None,
+                    help="pin diameter / a_o (memo: 0.05-0.07)")
+    ap.add_argument("--n-pins", type=int, default=None, help="pins per aperture")
     ap.add_argument("--no-pins", action="store_true")
-    ap.add_argument("--d-pin", type=float, default=None)
-    ap.add_argument("--pin-z", default=None, help="e.g. 0.18,0.82")
+    ap.add_argument("--miter-slope", type=float, default=None,
+                    help="dz/dx of the septum tip edge; 1.0 = 45 deg")
+    ap.add_argument("--sep-overhang", type=float, default=None)
+    ap.add_argument("--trans-gap", type=float, default=None)
     ap.add_argument("--n-steps", type=int, default=None)
-    ap.add_argument("--step-len", type=float, default=None)
+    ap.add_argument("--ap-len-norm", type=float, default=None)
     return ap
 
 
@@ -43,19 +49,21 @@ def params_from_args(a) -> BoifotParams:
     for attr, val in [
         ("mesh_res", a.mesh_res),
         ("mesh_res_fine", a.mesh_res_fine),
+        ("mesh_res_junction", a.mesh_res_junction),
         ("nr_timesteps", a.timesteps),
-        ("t_sep", a.t_sep),
-        ("l_sep", a.l_sep),
-        ("d_pin", a.d_pin),
+        ("dt_sep_norm", a.dt_sep_norm),
+        ("pin_d_norm", a.pin_d_norm),
+        ("n_pins", a.n_pins),
+        ("miter_slope", a.miter_slope),
+        ("sep_overhang", a.sep_overhang),
+        ("trans_gap", a.trans_gap),
         ("n_steps", a.n_steps),
-        ("step_len", a.step_len),
+        ("ap_len_norm", a.ap_len_norm),
     ]:
         if val is not None:
             setattr(p, attr, val)
     if a.no_pins:
         p.pins_enabled = False
-    if a.pin_z:
-        p.pin_z_frac = tuple(float(v) for v in a.pin_z.split(","))
     p.__post_init__()
     return p
 
@@ -84,7 +92,8 @@ def main() -> int:
     sw.save(a.out, freq, S, p)
     sw.write_touchstone(os.path.join(a.out, "boifot_wr28.s5p"), freq, S)
 
-    Sd = sw.deembed(S, freq, p, [8.0, 8.0, 22.5, 10.0, 10.0])
+    from boifot_omt.model import build_model
+    Sd = sw.deembed(S, freq, p, build_model(p).deembed_mm)
     m = sw.metrics(S, freq, band=(p.f_lo, p.f_hi))
     md = sw.metrics(Sd, freq, band=(p.f_lo, p.f_hi))
 

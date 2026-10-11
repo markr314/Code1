@@ -1,14 +1,14 @@
-"""CSXCAD geometry construction for the Boifot junction.
+"""CSXCAD geometry for the Bøifot junction (ALMA Memo 425 arrangement).
 
-The structure is built by filling the whole computational domain with metal
-and then carving the waveguide volumes out of it with higher-priority "air"
-primitives.  The septum and the compensation pins are then put back as metal
-at a still higher priority.  That ordering makes the junction geometry a
-handful of boxes instead of an assembly of walls.
+The domain is filled with metal and the guide volumes are carved out of it
+with higher-priority "air" primitives; the septum and pins then go back in as
+metal at a higher priority still.
 """
 from __future__ import annotations
 
 from typing import List
+import bisect
+
 import numpy as np
 
 from .params import BoifotParams
@@ -18,185 +18,175 @@ PRIO_AIR = 10
 PRIO_METAL = 20
 
 
-def _add_box(prop, start, stop, priority):
-    prop.AddBox(priority=priority, start=start, stop=stop)
-
-
 def build(CSX, p: BoifotParams) -> dict:
-    """Add all primitives for the junction to `CSX`.
-
-    Returns a dict of the landmark coordinates the caller needs for ports and
-    mesh generation.
-    """
+    """Add every primitive for the junction to `CSX`."""
     fill = CSX.AddMetal("shell")
     air = CSX.AddMaterial("air", epsilon=1.0, mue=1.0)
-    septum = CSX.AddMetal("septum")
+    metal = CSX.AddMetal("septum_pins")
 
-    xs, ys, zs = p.x_side_end, p.a_sq / 2.0, None
-    z0, z1 = p.z_min, p.z_max
+    ys = p.a_o / 2.0  # the common arm and the side arms are full height in y
+    xs = p.x_side_end
 
-    # --- solid metal block covering the whole domain ----------------------
-    _add_box(fill, [-xs, -ys, z0], [xs, ys, z1], PRIO_FILL)
+    # --- solid metal block over the whole domain -------------------------
+    fill.AddBox(priority=PRIO_FILL, start=[-xs, -ys, p.z_min], stop=[xs, ys, p.z_max])
 
-    # --- square common guide, up to the start of the main-arm steps -------
-    _add_box(
-        air,
-        [-p.a_sq / 2.0, -ys, z0],
-        [p.a_sq / 2.0, ys, p.z_step0],
-        PRIO_AIR,
+    # --- square common arm, up to the start of the transformer ------------
+    air.AddBox(
+        priority=PRIO_AIR,
+        start=[-p.a_o / 2, -ys, p.z_min],
+        stop=[p.a_o / 2, ys, p.z_trans0],
     )
 
-    # --- E-plane matching steps into the main arm -------------------------
-    for i, w in enumerate(p.step_widths):
-        za = p.z_step0 + i * p.step_len
-        zb = za + p.step_len
-        _add_box(air, [-w, -ys, za], [w, ys, zb], PRIO_AIR)
+    # --- four-step Chebyshev height transformer ---------------------------
+    for i, h in enumerate(p.step_heights):
+        za = p.z_trans0 + i * p.step_len
+        air.AddBox(
+            priority=PRIO_AIR,
+            start=[-p.a_o / 2, -h / 2.0, za],
+            stop=[p.a_o / 2, h / 2.0, za + p.step_len],
+        )
 
     # --- straight main arm ------------------------------------------------
-    _add_box(
-        air,
-        [-p.b_main / 2.0, -ys, p.z_main_start],
-        [p.b_main / 2.0, ys, z1],
-        PRIO_AIR,
+    air.AddBox(
+        priority=PRIO_AIR,
+        start=[-p.a_o / 2, -p.b_o / 2, p.z_trans1],
+        stop=[p.a_o / 2, p.b_o / 2, p.z_max],
     )
 
-    # --- side arms (and, where they meet the common guide, the apertures) --
+    # --- side arms; where they meet the common arm they form the apertures
+    for sgn in (+1, -1) if p.side_arms_enabled else ():
+        x_in, x_out = sgn * p.a_o / 2.0, sgn * xs
+        air.AddBox(
+            priority=PRIO_AIR,
+            start=[min(x_in, x_out), -ys, p.z_ap0],
+            stop=[max(x_in, x_out), ys, p.z_ap1],
+        )
+
+    # --- septum: thin plate in y=0 with a mitred leading edge -------------
+    # Footprint in the (z, x) plane: a wedge opening from the tip apex at
+    # (z=0, x=0) back to the side walls, then a full-width rectangle.  For
+    # the side-arm polarisation this edge is the pair of back-to-back miters
+    # that divides the power between the two side arms.
+    if p.dt_sep > 0:
+        z_pts = [p.z_tip, p.z_tip_end, p.z_sep_end, p.z_sep_end, p.z_tip_end]
+        x_pts = [0.0, p.a_o / 2, p.a_o / 2, -p.a_o / 2, -p.a_o / 2]
+        metal.AddLinPoly(
+            priority=PRIO_METAL,
+            points=np.array([z_pts, x_pts]),
+            norm_dir=1,
+            elevation=-p.dt_sep / 2.0,
+            length=p.dt_sep,
+        )
+
+    # --- compensation pins -------------------------------------------------
+    pins = []
     for sgn in (+1, -1):
-        x_in = sgn * p.a_sq / 2.0
-        x_out = sgn * xs
-        _add_box(
-            air,
-            [min(x_in, x_out), -p.b_side / 2.0, p.z_ap0],
-            [max(x_in, x_out), p.b_side / 2.0, p.z_ap1],
-            PRIO_AIR,
-        )
+        for zc in p.pin_z:
+            xc = sgn * p.pin_x
+            metal.AddCylinder(
+                priority=PRIO_METAL,
+                start=[xc, -ys, zc],
+                stop=[xc, ys, zc],
+                radius=p.d_pin / 2.0,
+            )
+            pins.append((xc, zc))
 
-    # --- septum -----------------------------------------------------------
-    if p.t_sep > 0:
-        _add_box(
-            septum,
-            [-p.t_sep / 2.0, -ys, p.z_sep_start],
-            [p.t_sep / 2.0, ys, p.z_sep_end],
-            PRIO_METAL,
-        )
-    else:
-        # zero-thickness PEC sheet on the x=0 mesh plane
-        _add_box(septum, [0.0, -ys, p.z_sep_start], [0.0, ys, p.z_sep_end], PRIO_METAL)
-
-    # --- compensation pins ------------------------------------------------
-    pin_coords = []
-    if p.pins_enabled and p.d_pin > 0:
-        for sgn in (+1, -1):
-            for frac in p.pin_z_frac:
-                zc = p.z_ap0 + frac * p.a_side
-                xc = sgn * p.a_sq / 2.0
-                septum.AddCylinder(
-                    priority=PRIO_METAL,
-                    start=[xc, -p.b_side / 2.0, zc],
-                    stop=[xc, p.b_side / 2.0, zc],
-                    radius=p.d_pin / 2.0,
-                )
-                pin_coords.append((xc, zc))
-
-    return {
-        "x_lim": (-xs, xs),
-        "y_lim": (-ys, ys),
-        "z_lim": (z0, z1),
-        "pins": pin_coords,
-    }
+    return {"x_lim": (-xs, xs), "y_lim": (-ys, ys), "z_lim": (p.z_min, p.z_max),
+            "pins": pins}
 
 
 def mesh_lines(p: BoifotParams) -> dict:
-    """Critical mesh lines for the junction.
+    """Critical mesh lines.
 
-    Returns, per axis, a sorted line list.  Lines come in two classes:
-
-    * hard - material boundaries, which must be present or the geometry is
-      discretised wrongly;
-    * soft - local refinement around the septum, the aperture edges and the
-      pins, which may be dropped.
-
-    Soft lines are only kept when they stay at least ``tol`` away from every
-    line already kept.  Without that filter, independently generated
-    refinement ladders can land a few microns apart, and since the FDTD
-    timestep is set by the smallest cell anywhere in the mesh, a single
-    stray sliver cell slows the whole simulation by orders of magnitude.
+    Hard lines are material boundaries and must survive; soft lines are local
+    refinement and are dropped when they fall within half a fine cell of a
+    line already kept.  The FDTD timestep is set by the smallest cell anywhere
+    in the mesh, so a stray sliver cell is expensive.
     """
-    ys = p.a_sq / 2.0
+    ys = p.a_o / 2.0
     fine = p.mesh_res_fine
-    tol = 0.5 * fine
+    tol = 0.75 * fine
+    res_j = p.mesh_res_junction
 
-    # ---------------- hard lines: material boundaries --------------------
-    hx = {-p.x_side_end, p.x_side_end, -p.a_sq / 2.0, p.a_sq / 2.0,
-          -p.b_main / 2.0, p.b_main / 2.0}
-    for w in p.step_widths:
-        hx.update({-w, w})
-    if p.t_sep > 0:
-        hx.update({-p.t_sep / 2.0, p.t_sep / 2.0})
-    else:
-        hx.add(0.0)
-    if p.pins_enabled and p.d_pin > 0:
+    # ---------------- hard: material boundaries --------------------------
+    hx = {-p.x_side_end, p.x_side_end, -p.a_o / 2.0, p.a_o / 2.0}
+    if p.pins_enabled and p.n_pins > 0:
         for sgn in (+1, -1):
-            hx.update({sgn * (p.a_sq / 2.0 - p.d_pin / 2.0),
-                       sgn * (p.a_sq / 2.0 + p.d_pin / 2.0)})
+            hx.update({sgn * (p.pin_x - p.d_pin / 2.0), sgn * (p.pin_x + p.d_pin / 2.0)})
 
-    hy = {-ys, ys, -p.b_side / 2.0, p.b_side / 2.0}
+    hy = {-ys, ys, -p.b_o / 2.0, p.b_o / 2.0}
+    for h in p.step_heights:
+        hy.update({-h / 2.0, h / 2.0})
+    if p.dt_sep > 0:
+        hy.update({-p.dt_sep / 2.0, p.dt_sep / 2.0})
+    else:
+        hy.add(0.0)
 
-    hz = {p.z_min, p.z_max, p.z_ap0, p.z_ap1, p.z_main_start,
-          p.z_sep_start, p.z_sep_end}
+    hz = {p.z_min, p.z_max, p.z_tip, p.z_tip_end, p.z_ap1, p.z_trans0, p.z_trans1,
+          p.z_sep_end}
     for i in range(p.n_steps + 1):
-        hz.add(p.z_step0 + i * p.step_len)
-    if p.pins_enabled and p.d_pin > 0:
-        for frac in p.pin_z_frac:
-            zc = p.z_ap0 + frac * p.a_side
-            hz.update({zc - p.d_pin / 2.0, zc + p.d_pin / 2.0})
+        hz.add(p.z_trans0 + i * p.step_len)
+    for zc in p.pin_z:
+        hz.update({zc - p.d_pin / 2.0, zc + p.d_pin / 2.0})
 
-    # ---------------- soft lines: local refinement -----------------------
+    # ---------------- soft: local refinement ------------------------------
     sx, sy, sz = set(), set(), set()
+
+    # the junction region carries the staircased mitred edge, so resolve both
+    # x and z there more finely than the straight guides
+    n_j = max(int(round(p.a_o / res_j)), 2)
+    for i in range(n_j + 1):
+        sx.add(-p.a_o / 2.0 + i * p.a_o / n_j)
+    n_jz = max(int(round((p.z_ap1 - p.z_ap0) / res_j)), 2)
+    for i in range(n_jz + 1):
+        sz.add(p.z_ap0 + i * (p.z_ap1 - p.z_ap0) / n_jz)
+
     # across the septum
     for k in range(1, 5):
-        sx.update({-p.t_sep / 2.0 - k * fine, p.t_sep / 2.0 + k * fine})
-    # either side of each aperture plane
-    for sgn in (+1, -1):
-        for k in range(1, 4):
-            sx.add(sgn * (p.a_sq / 2.0 - k * fine))
-    # around the side-arm broad walls
-    for k in range(1, 3):
-        sy.update({-p.b_side / 2.0 - k * fine, p.b_side / 2.0 + k * fine,
-                   -p.b_side / 2.0 + k * fine, p.b_side / 2.0 - k * fine})
-    # aperture edges, septum leading edge, pin surroundings
+        sy.update({-p.dt_sep / 2.0 - k * fine, p.dt_sep / 2.0 + k * fine})
+    # around the main-arm step corners
+    for h in p.step_heights + [p.b_o]:
+        for k in (1, 2):
+            sy.update({-h / 2.0 - k * fine, h / 2.0 + k * fine})
+    # around the septum tip and the aperture edges in z
     for k in range(1, 4):
-        sz.update({p.z_ap0 + k * fine, p.z_ap1 - k * fine,
-                   p.z_sep_start - k * fine, p.z_sep_start + k * fine})
-    if p.pins_enabled and p.d_pin > 0:
-        for frac in p.pin_z_frac:
-            zc = p.z_ap0 + frac * p.a_side
-            sz.add(zc)
-            for k in range(1, 3):
-                sz.update({zc - p.d_pin / 2.0 - k * fine,
-                           zc + p.d_pin / 2.0 + k * fine})
+        sz.update({p.z_tip + k * fine, p.z_tip - k * fine,
+                   p.z_ap1 - k * fine, p.z_ap1 + k * fine})
+    # around the pins
+    for zc in p.pin_z:
+        sz.add(zc)
+        for k in (1, 2):
+            sz.update({zc - p.d_pin / 2.0 - k * fine, zc + p.d_pin / 2.0 + k * fine})
+    if p.pins_enabled and p.n_pins > 0:
+        # A round post is staircased, and if its surface is under-resolved the
+        # steps form a weakly coupled sliver resonator that rings for the whole
+        # run.  Resolve the post itself with several cells across, and keep that
+        # resolution a little way out from its surface.
+        step = p.d_pin / 4.0
+        reach = 1.5 * p.d_pin
+        n = int(np.ceil(reach / step))
+        for sgn in (+1, -1):
+            for k in range(-n, n + 1):
+                sx.add(sgn * p.pin_x + k * step)
+            for zc in p.pin_z:
+                for k in range(-n, n + 1):
+                    sz.add(zc + k * step)
 
     def assemble(hard, soft, lo, hi):
         keep = sorted({round(v, 9) for v in hard if lo - 1e-9 <= v <= hi + 1e-9})
-        # a hard-line pair closer than tol is a geometry problem, not a mesh
-        # one: report it rather than silently merging a feature away.
         for a_, b_ in zip(keep, keep[1:]):
-            if b_ - a_ < 1e-6:
-                continue
-            if b_ - a_ < tol:
+            if 1e-6 < b_ - a_ < tol:
                 raise ValueError(
                     f"material boundaries {a_:.4f} and {b_:.4f} mm are "
-                    f"{(b_-a_)*1000:.1f} um apart, below the {tol*1000:.0f} um "
-                    "mesh tolerance; adjust the dimensions or mesh_res_fine"
+                    f"{(b_-a_)*1000:.1f} um apart, below the {tol*1000:.0f} um mesh "
+                    "tolerance; adjust the dimensions or mesh_res_fine"
                 )
         for v in sorted(soft):
             if not (lo - 1e-9 <= v <= hi + 1e-9):
                 continue
-            import bisect
             i = bisect.bisect_left(keep, v)
-            near = min(
-                [abs(v - keep[j]) for j in (i - 1, i) if 0 <= j < len(keep)] or [1e9]
-            )
+            near = min([abs(v - keep[j]) for j in (i - 1, i) if 0 <= j < len(keep)]
+                       or [1e9])
             if near >= tol:
                 bisect.insort(keep, round(v, 9))
         return keep
