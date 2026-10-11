@@ -257,6 +257,35 @@ The practical lesson for anyone extending this: convergence is
 configuration-dependent. Budget timesteps per case and check the power error
 before believing any comparison.
 
+### Pin count: a trade that runs opposite to the memo
+
+Matched settings, both converged, 1 pin versus 2 pins per aperture:
+
+| | 1 pin | 2 pins |
+|---|---|---|
+| main arm, worst RL | **−23.40 dB** | −17.09 dB |
+| side arm, worst RL | −1.63 dB | **−2.90 dB** |
+
+The trade is real and it is the pin count, not the mesh. But the direction is
+the reverse of the memo, which states that as pins are added "the main-arm
+return loss improved while the side-arm return loss gracefully degrades."
+
+The likely explanation is that the multi-pin *placement* here does not match
+theirs, because the memo is ambiguous on exactly this point. For one pair it
+is explicit — "the outer diameter of the pin flush to the side-arm wall
+(i.e. the pins are physically in the common-arm) and centered in the
+side-arm aperture" — and that is what is implemented. For two it says the
+return loss is minimised "when the pins are centered in the aperture formed
+by the side-arm wall", and two pins cannot both sit at the centre. Either
+they are spread along z and centred as a pair (the reading used here), or
+"centered" means centred in *x*, straddling the aperture plane rather than
+sitting flush behind it. Those are different structures. `pin_inset` covers
+both: 0 is flush, −d_pin/2 straddles the plane.
+
+**Until that is settled, use 1 pin.** 1.3 dB on the side arm is not worth
+6.3 dB on the main arm, and the main arm is the part that otherwise matches
+the memo.
+
 ### Septum thickness
 
 All at 2 pins, 70 000 timesteps, converged (1–4 % power error):
