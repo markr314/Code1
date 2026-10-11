@@ -92,6 +92,14 @@ class BoifotParams:
     w_q: float = 0.84
     fo_over_fc: float = 1.565
     trans_gap: float = 0.0  # straight square guide between tip and transformer
+    # Length of the transformer's FIRST section, when it should differ from
+    # the quarter-wave value.  Ideal Chebyshev theory treats every junction as
+    # a perfect impedance step, but each step carries a shunt susceptance, and
+    # the first section is the odd one out: it does not face a plain guide, it
+    # faces the junction itself (aperture, septum tip, pins).  It is also the
+    # phase knob on the reflective termination that the side-arm polarisation
+    # looks into.  None keeps it equal to the others.
+    first_step_len: float = None
     main_len: float = 14.0  # straight main-arm run after the transformer
 
     # ---- pins (memo: 0.05 < d_pin/a_o < 0.07) ---------------------------
@@ -219,8 +227,16 @@ class BoifotParams:
         return self.z_tip_end + self.trans_gap
 
     @property
+    def step_lengths(self) -> List[float]:
+        """Length of each transformer section, first one possibly different."""
+        L = [self.step_len] * self.n_steps
+        if self.first_step_len is not None and self.n_steps > 0:
+            L[0] = self.first_step_len
+        return L
+
+    @property
     def z_trans1(self) -> float:
-        return self.z_trans0 + self.n_steps * self.step_len
+        return self.z_trans0 + sum(self.step_lengths)
 
     @property
     def z_sep_end(self) -> float:
@@ -295,6 +311,8 @@ class BoifotParams:
             f"  transformer               : {self.n_steps}-step,"
             f" {self.transformer_ratio:.0f}:1 Chebyshev, w_q = {self.w_q:.2f},"
             f" f_o/f_c = {self.fo_over_fc:.3f}",
+            f"    section lengths         : "
+            + ", ".join("%.3f" % L for L in self.step_lengths) + " mm",
             f"    synchronous frequency   : {self.f_o/1e9:.2f} GHz,"
             f" section length {self.step_len:.3f} mm",
             f"    section heights         : "

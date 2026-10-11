@@ -38,13 +38,14 @@ def build(CSX, p: BoifotParams) -> dict:
     )
 
     # --- four-step Chebyshev height transformer ---------------------------
-    for i, h in enumerate(p.step_heights):
-        za = p.z_trans0 + i * p.step_len
+    za = p.z_trans0
+    for h, L in zip(p.step_heights, p.step_lengths):
         air.AddBox(
             priority=PRIO_AIR,
             start=[-p.a_o / 2, -h / 2.0, za],
-            stop=[p.a_o / 2, h / 2.0, za + p.step_len],
+            stop=[p.a_o / 2, h / 2.0, za + L],
         )
+        za += L
 
     # --- straight main arm ------------------------------------------------
     air.AddBox(
@@ -134,8 +135,11 @@ def mesh_lines(p: BoifotParams) -> dict:
 
     hz = {p.z_min, p.z_max, p.z_tip, p.z_tip_end, p.z_ap0, p.z_ap1, p.z_trans0,
           p.z_trans1, p.z_sep_end}
-    for i in range(p.n_steps + 1):
-        hz.add(p.z_trans0 + i * p.step_len)
+    za = p.z_trans0
+    hz.add(za)
+    for L in p.step_lengths:
+        za += L
+        hz.add(za)
     for zc in p.pin_z:
         hz.update({zc - p.d_pin / 2.0, zc + p.d_pin / 2.0})
 

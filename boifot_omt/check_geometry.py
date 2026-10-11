@@ -23,9 +23,10 @@ def air_boxes(p: BoifotParams) -> List[Tuple[float, ...]]:
         (-p.a_o / 2, p.a_o / 2, -ys, ys, p.z_min, p.z_trans0),  # common arm
         (-p.a_o / 2, p.a_o / 2, -p.b_o / 2, p.b_o / 2, p.z_trans1, p.z_max),  # main
     ]
-    for i, h in enumerate(p.step_heights):
-        za = p.z_trans0 + i * p.step_len
-        boxes.append((-p.a_o / 2, p.a_o / 2, -h / 2, h / 2, za, za + p.step_len))
+    za = p.z_trans0
+    for h, L in zip(p.step_heights, p.step_lengths):
+        boxes.append((-p.a_o / 2, p.a_o / 2, -h / 2, h / 2, za, za + L))
+        za += L
     for sgn in (+1, -1) if p.side_arms_enabled else ():
         x_in, x_out = sgn * p.a_o / 2.0, sgn * p.x_side_end
         boxes.append(
